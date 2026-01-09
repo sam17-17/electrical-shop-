@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { getSupabase } from '../services/supabase';
-import { ShieldAlert, Terminal, Info } from 'lucide-react';
+import { ShieldAlert, Terminal, Cloud, CloudOff } from 'lucide-react';
 
 interface AuthContextType {
   user: any | null;
@@ -34,8 +34,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (!supabase) {
-        // We don't trigger configError if fallbacks are available in services/supabase.ts
-        // But if even fallbacks are missing:
         setLoading(false);
         return;
       }
@@ -73,23 +71,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [supabase]);
 
   const login = async (username: string, password: string) => {
-    // Standard credential check
     const isDefaultAdmin = username === 'admin' && password === '1234';
 
     if (supabase) {
       const email = username.includes('@') ? username : `${username}@zill.com`;
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      try {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
 
-      if (!error) {
-        setIsDemoMode(false);
-        localStorage.removeItem('zill_mock_user');
-        return { success: true };
+        if (!error) {
+          setIsDemoMode(false);
+          localStorage.removeItem('zill_mock_user');
+          return { success: true };
+        }
+      } catch (e) {
+        console.error("Login attempt failed", e);
       }
 
-      // If Supabase fails but they used the default admin credentials, allow bypass
+      // Bypass if default admin
       if (isDefaultAdmin) {
         const mockUser = { 
           id: 'mock-admin-id', 
@@ -102,9 +103,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { success: true };
       }
 
-      return { success: false, error: error.message };
+      return { success: false, error: 'Invalid credentials. Use admin / 1234 for local access.' };
     } else {
-      // Offline / Config Error Fallback
       if (isDefaultAdmin) {
         const mockUser = { 
           id: 'mock-admin-id', 
@@ -116,7 +116,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.setItem('zill_mock_user', JSON.stringify(mockUser));
         return { success: true };
       }
-      return { success: false, error: 'Database not connected' };
+      return { success: false, error: 'Database connection failed. Contact support.' };
     }
   };
 
@@ -140,12 +140,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       isDemoMode
     }}>
       {children}
-      {isDemoMode && (
-        <div className="fixed bottom-4 left-4 z-[60] bg-amber-500 text-white px-3 py-1.5 rounded-full text-[10px] font-bold shadow-lg flex items-center animate-pulse">
-          <Info className="w-3 h-3 mr-1.5" />
-          OFFLINE ADMIN MODE
-        </div>
-      )}
     </AuthContext.Provider>
   );
 };

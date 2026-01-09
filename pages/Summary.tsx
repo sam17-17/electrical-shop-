@@ -90,7 +90,7 @@ export const Summary: React.FC = () => {
   const navigate = useNavigate();
   const [timeRange, setTimeRange] = useState('This Month');
 
-  const isAdmin = user?.role === 'Admin';
+  const isAdmin = (user?.user_metadata?.role || user?.role) === 'Admin';
 
   // --- DATA CALCULATIONS ---
   const metrics = useMemo(() => {

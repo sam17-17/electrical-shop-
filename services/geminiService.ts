@@ -1,24 +1,18 @@
 import { GoogleGenAI } from "@google/genai";
 
-let aiClient: GoogleGenAI | null = null;
+// Guideline: Always use 'gemini-3-flash-preview' for basic text tasks.
+const MODEL_NAME = 'gemini-3-flash-preview';
 
-const getClient = () => {
-  if (!aiClient) {
-    const apiKey = process.env.API_KEY || '';
-    // In a real app, we would handle missing keys more gracefully, 
-    // but for this demo, we assume the environment is set up correctly.
-    aiClient = new GoogleGenAI({ apiKey });
-  }
-  return aiClient;
-};
-
+/**
+ * Generates a response from Gemini AI based on user prompt and optional context.
+ */
 export const generateResponse = async (
   prompt: string, 
   contextData?: string
 ): Promise<string> => {
   try {
-    const client = getClient();
-    const modelId = 'gemini-3-flash-preview';
+    // Guideline: Create a new instance right before use and use process.env.API_KEY directly.
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
     let fullPrompt = prompt;
     
@@ -36,14 +30,16 @@ export const generateResponse = async (
       fullPrompt = `You are a helpful CRM assistant. User Question: ${prompt}`;
     }
 
-    const response = await client.models.generateContent({
-      model: modelId,
+    // Guideline: Use ai.models.generateContent to query GenAI.
+    const response = await ai.models.generateContent({
+      model: MODEL_NAME,
       contents: fullPrompt,
     });
 
+    // Guideline: response.text is a property, not a method.
     return response.text || "I couldn't generate a response.";
   } catch (error) {
     console.error("Gemini API Error:", error);
-    return "I'm having trouble connecting to the AI service right now. Please check your API key.";
+    return "I'm having trouble connecting to the AI service right now. Please verify the system connectivity.";
   }
 };

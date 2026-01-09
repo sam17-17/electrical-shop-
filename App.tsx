@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Wallet, Users, FileText, ShoppingCart, Truck, 
   Briefcase, Receipt, Layers, Folder, UserCheck, BookOpen, 
   PieChart, Settings as SettingsIcon, Menu, X, ChevronRight,
-  ClipboardList, StickyNote, LogOut, Loader2
+  ClipboardList, StickyNote, LogOut, Loader2, Database, Cloud, CloudOff, ShieldCheck
 } from 'lucide-react';
 import { EntityType, NavItem, DataColumn } from './types';
 import { Summary } from './pages/Summary';
@@ -53,13 +53,13 @@ const COLUMNS: Record<string, DataColumn[]> = {
     { key: 'phone', label: 'Phone Number', type: 'phone' },
   ],
   [EntityType.SALES_QUOTES]: [
-    ...SALES_COLUMNS_BASE.map(c => c.key === 'status' ? { ...c, options: ['Draft', 'Sent', 'Accepted', 'Rejected'] } : c)
+    ...SALES_QUOTES_COLS()
   ],
   [EntityType.SALES_ORDERS]: [ 
-    ...SALES_COLUMNS_BASE.map(c => c.key === 'status' ? { ...c, options: ['Pending', 'Confirmed', 'Shipped', 'Cancelled'] } : c).map(c => c.key === 'date' ? { ...c, label: 'Receipt Date' } : c)
+    ...SALES_ORDERS_COLS()
   ],
   [EntityType.SALES_INVOICES]: [
-    ...SALES_COLUMNS_BASE.map(c => c.key === 'status' ? { ...c, options: ['Draft', 'Sent', 'Paid', 'Unpaid', 'Overdue'] } : c)
+    ...SALES_INVOICES_COLS()
   ],
   [EntityType.DELIVERY_NOTES]: [
     { key: 'id', label: 'DN #', type: 'readonly' },
@@ -110,6 +110,10 @@ const COLUMNS: Record<string, DataColumn[]> = {
   ],
 };
 
+function SALES_QUOTES_COLS() { return SALES_COLUMNS_BASE.map(c => c.key === 'status' ? { ...c, options: ['Draft', 'Sent', 'Accepted', 'Rejected'] } : c); }
+function SALES_ORDERS_COLS() { return SALES_COLUMNS_BASE.map(c => c.key === 'status' ? { ...c, options: ['Pending', 'Confirmed', 'Shipped', 'Cancelled'] } : c).map(c => c.key === 'date' ? { ...c, label: 'Receipt Date' } : c); }
+function SALES_INVOICES_COLS() { return SALES_COLUMNS_BASE.map(c => c.key === 'status' ? { ...c, options: ['Draft', 'Sent', 'Paid', 'Unpaid', 'Overdue'] } : c); }
+
 const DEFAULT_COLUMNS: DataColumn[] = [
   { key: 'name', label: 'Name', type: 'text', required: true },
   { key: 'date', label: 'Date', type: 'date' },
@@ -134,6 +138,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: EntityType.EMPLOYEES, label: 'Employees', icon: UserCheck },
   { id: EntityType.JOURNAL, label: 'Journal Entries', icon: BookOpen },
   { id: EntityType.REPORTS, label: 'Reports', icon: PieChart },
+  { id: EntityType.SYSTEM_USERS, label: 'System Users', icon: ShieldCheck, group: 'Administration', requiredRole: 'Admin' },
   { id: EntityType.SETTINGS, label: 'Settings', icon: SettingsIcon },
 ];
 
@@ -141,11 +146,19 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const location = useLocation();
   const { data } = useData();
-  const { user, logout } = useAuth();
+  const { user, logout, isDemoMode } = useAuth();
   
-  const isAdmin = true; // Typically derived from user metadata or profile table
+  const userRole = user?.user_metadata?.role || user?.role;
+  const isAdmin = userRole === 'Admin';
 
-  const groupedNav = NAV_ITEMS.reduce((acc, item) => {
+  const filteredNavItems = NAV_ITEMS.filter(item => {
+    if (item.requiredRole && item.requiredRole !== userRole) {
+      return false;
+    }
+    return true;
+  });
+
+  const groupedNav = filteredNavItems.reduce((acc, item) => {
     const key = item.group || 'Main';
     if (!acc[key]) acc[key] = [];
     acc[key].push(item);
@@ -212,6 +225,17 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         </nav>
         
         <div className="border-t border-slate-800">
+           {/* Connection Status Sub-Footer */}
+           {sidebarOpen && (
+             <div className={`px-4 py-2 text-[10px] flex items-center justify-between ${isDemoMode ? 'text-amber-400 bg-amber-500/5' : 'text-emerald-400 bg-emerald-500/5'}`}>
+                <div className="flex items-center">
+                  {isDemoMode ? <CloudOff className="w-3 h-3 mr-1.5" /> : <Cloud className="w-3 h-3 mr-1.5" />}
+                  <span>{isDemoMode ? 'STORAGE: LOCAL' : 'STORAGE: CLOUD SYNC'}</span>
+                </div>
+                {!isDemoMode && <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>}
+             </div>
+           )}
+
            <div className="flex items-center justify-between p-2">
               <div className={`flex-1 flex items-center p-2 rounded-lg cursor-default ${!sidebarOpen ? 'justify-center' : ''}`}>
                 <img 
@@ -221,8 +245,8 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                 />
                 {sidebarOpen && (
                   <div className="ml-3 text-left overflow-hidden">
-                    <p className="text-sm font-medium text-slate-300 truncate">{user?.email || 'User'}</p>
-                    <p className="text-xs text-slate-500 truncate">Authenticated</p>
+                    <p className="text-sm font-medium text-slate-300 truncate">{user?.username || user?.email?.split('@')[0] || 'User'}</p>
+                    <p className="text-xs text-slate-500 truncate">{isDemoMode ? 'Local Admin' : 'Cloud Session'}</p>
                   </div>
                 )}
               </div>
@@ -276,7 +300,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
 const AppContent: React.FC = () => {
   const { data, addEntity, updateEntity, deleteEntity, getEntity, loading: dataLoading } = useData();
-  const { isAuthenticated, loading: authLoading } = useAuth();
+  const { isAuthenticated, loading: authLoading, user } = useAuth();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [activeType, setActiveType] = useState<EntityType | null>(null);
@@ -284,8 +308,14 @@ const AppContent: React.FC = () => {
   if (authLoading || dataLoading) {
     return (
       <div className="h-screen w-full flex flex-col items-center justify-center bg-slate-50">
-        <Loader2 className="w-12 h-12 text-indigo-600 animate-spin mb-4" />
-        <p className="text-slate-500 font-medium">Synchronizing with cloud storage...</p>
+        <div className="relative">
+          <div className="w-16 h-16 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin"></div>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <Database className="w-6 h-6 text-indigo-600" />
+          </div>
+        </div>
+        <p className="text-slate-600 font-bold mt-6">ZILL CRM</p>
+        <p className="text-slate-400 text-sm mt-1 animate-pulse">Initializing data vaults...</p>
       </div>
     );
   }

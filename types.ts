@@ -47,6 +47,7 @@ export interface NavItem {
   label: string;
   icon: any; // Lucide icon component
   group?: string;
+  requiredRole?: string;
 }
 
 export interface ChatMessage {
