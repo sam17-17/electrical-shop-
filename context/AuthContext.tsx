@@ -5,6 +5,7 @@ import { ShieldAlert, Terminal, Cloud, CloudOff } from 'lucide-react';
 interface AuthContextType {
   user: any | null;
   login: (username: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  signUp: (email: string, password: string, fullName: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   isAuthenticated: boolean;
   loading: boolean;
@@ -60,6 +61,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (session?.user) {
           setUser(session.user);
           setIsDemoMode(false);
+          localStorage.removeItem('zill_mock_user');
         } else if (!localStorage.getItem('zill_mock_user')) {
           setUser(null);
         }
@@ -69,6 +71,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     return () => subscription?.unsubscribe();
   }, [supabase]);
+
+  const signUp = async (email: string, password: string, fullName: string) => {
+    if (!supabase) return { success: false, error: 'Cloud service unavailable' };
+    
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+            role: 'Admin'
+          }
+        }
+      });
+
+      if (error) return { success: false, error: error.message };
+      return { success: true };
+    } catch (e: any) {
+      return { success: false, error: e.message };
+    }
+  };
 
   const login = async (username: string, password: string) => {
     const isDefaultAdmin = username === 'admin' && password === '1234';
@@ -133,6 +157,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     <AuthContext.Provider value={{ 
       user, 
       login, 
+      signUp,
       logout, 
       isAuthenticated: !!user,
       loading,

@@ -3,7 +3,8 @@ import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { 
   Download, Upload, Trash2, Database, Save, ArrowLeft, 
-  Terminal, Copy, Check, Cloud, CloudOff, Info, AlertTriangle, ChevronRight 
+  Terminal, Copy, Check, Cloud, CloudOff, Info, AlertTriangle, ChevronRight,
+  Share2, ArrowUpCircle
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -13,6 +14,7 @@ export const Settings: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   const [copied, setCopied] = useState(false);
+  const [isMigrating, setIsMigrating] = useState(false);
 
   const sqlSchema = `-- Run this in your Supabase SQL Editor to enable Cloud Sync
 CREATE TABLE IF NOT EXISTS public.crm_entities (
@@ -82,6 +84,24 @@ USING (auth.uid() = user_id);`;
       }
   };
 
+  const handleSyncToCloud = async () => {
+    if (isDemoMode) {
+      alert("You must be logged in with a Cloud Account (not Demo Admin) to sync to cloud. Please Sign Up and Log In first.");
+      return;
+    }
+    
+    setIsMigrating(true);
+    try {
+      // Re-trigger import data which now pushes to Supabase for the active user
+      await importData(data);
+      alert("Success! Your local data has been pushed to your cloud account. You can now access this data from any other device by logging in.");
+    } catch (e) {
+      alert("Sync failed. Ensure your database is properly configured in the helper section.");
+    } finally {
+      setIsMigrating(false);
+    }
+  };
+
   return (
     <div className="space-y-6 animate-fade-in max-w-5xl mx-auto pb-12">
       <div className="flex items-center gap-4">
@@ -93,8 +113,8 @@ USING (auth.uid() = user_id);`;
             <ArrowLeft className="w-5 h-5" />
         </button>
         <div>
-            <h1 className="text-2xl font-bold text-slate-900">System Configuration</h1>
-            <p className="text-slate-500">Manage data flow, storage, and database connectivity</p>
+            <h1 className="text-2xl font-bold text-slate-900">Cloud & Data Settings</h1>
+            <p className="text-slate-500">Enable multi-device synchronization and sharing</p>
         </div>
       </div>
 
@@ -121,21 +141,53 @@ USING (auth.uid() = user_id);`;
                 {isDemoMode && (
                     <div className="bg-white/50 p-3 rounded-lg border border-amber-100 mb-4 text-xs text-amber-800 flex items-start">
                         <Info className="w-4 h-4 mr-2 shrink-0 mt-0.5" />
-                        <p>You are in <strong>Admin Bypass Mode</strong>. Your data is perfectly safe in this browser, but won't be visible on other devices until Cloud Sync is configured.</p>
+                        <p>You are in <strong>Local Demo Mode</strong>. Data is only stored on this PC. To share with other PCs, you need to sign up for a real account.</p>
                     </div>
                 )}
                 
                 {!isDemoMode && (
-                    <div className="flex items-center text-xs text-emerald-700 font-medium">
-                        <div className="w-2 h-2 rounded-full bg-emerald-500 mr-2 animate-pulse"></div>
-                        Last synced: Just now
+                    <div className="space-y-4">
+                        <div className="flex items-center text-xs text-emerald-700 font-medium">
+                            <div className="w-2 h-2 rounded-full bg-emerald-500 mr-2 animate-pulse"></div>
+                            Connected to live database
+                        </div>
+                        <button 
+                          onClick={handleSyncToCloud}
+                          disabled={isMigrating}
+                          className="w-full flex items-center justify-center py-2 bg-emerald-600 text-white rounded-lg text-sm font-bold shadow-lg hover:bg-emerald-700 transition-all disabled:opacity-50"
+                        >
+                          <ArrowUpCircle className="w-4 h-4 mr-2" />
+                          {isMigrating ? 'Syncing...' : 'Push Local Data to Cloud'}
+                        </button>
                     </div>
                 )}
             </div>
 
-            {/* Persistence Card */}
+            {/* Sharing Guide */}
             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                 <h3 className="font-bold text-slate-800 mb-4 flex items-center">
+                    <Share2 className="w-4 h-4 mr-2 text-indigo-600" />
+                    How to Share
+                </h3>
+                <div className="text-xs text-slate-600 space-y-4 leading-relaxed">
+                   <div className="flex gap-3">
+                      <div className="w-6 h-6 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center shrink-0 font-bold text-indigo-600">1</div>
+                      <p>Go to the login screen and <strong>Sign Up</strong> for a real cloud account.</p>
+                   </div>
+                   <div className="flex gap-3">
+                      <div className="w-6 h-6 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center shrink-0 font-bold text-indigo-600">2</div>
+                      <p>On this page, click <strong>"Push Local Data to Cloud"</strong> to upload your work.</p>
+                   </div>
+                   <div className="flex gap-3">
+                      <div className="w-6 h-6 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center shrink-0 font-bold text-indigo-600">3</div>
+                      <p>Open this app on any other PC and log in with the <strong>same account</strong>.</p>
+                   </div>
+                </div>
+            </div>
+
+            {/* Persistence Card */}
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                <h3 className="font-bold text-slate-800 mb-4 flex items-center text-sm">
                     <Database className="w-4 h-4 mr-2" />
                     Data Operations
                 </h3>
@@ -143,29 +195,29 @@ USING (auth.uid() = user_id);`;
                 <div className="space-y-3">
                     <button 
                         onClick={handleExport}
-                        className="w-full flex items-center justify-between px-4 py-2.5 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors bg-white shadow-sm"
+                        className="w-full flex items-center justify-between px-4 py-2 border border-slate-200 rounded-lg text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors bg-white shadow-sm"
                     >
                         <span className="flex items-center"><Download className="w-4 h-4 mr-2" /> Export JSON</span>
-                        <ChevronRight className="w-4 h-4 text-slate-300" />
+                        <ChevronRight className="w-3 h-3 text-slate-300" />
                     </button>
                     
                     <div className="relative">
                         <input type="file" ref={fileInputRef} onChange={handleImportFile} accept=".json" className="hidden" />
                         <button 
                             onClick={handleImportTrigger}
-                            className="w-full flex items-center justify-between px-4 py-2.5 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors bg-white shadow-sm"
+                            className="w-full flex items-center justify-between px-4 py-2 border border-slate-200 rounded-lg text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors bg-white shadow-sm"
                         >
                             <span className="flex items-center"><Upload className="w-4 h-4 mr-2" /> Import JSON</span>
-                            <ChevronRight className="w-4 h-4 text-slate-300" />
+                            <ChevronRight className="w-3 h-3 text-slate-300" />
                         </button>
                     </div>
 
                     <div className="pt-4 border-t border-slate-100">
                         <button 
                             onClick={handleClearData}
-                            className="w-full flex items-center justify-center px-4 py-2.5 border border-red-100 text-red-600 rounded-lg hover:bg-red-50 text-sm font-semibold transition-colors bg-white"
+                            className="w-full flex items-center justify-center px-4 py-2 border border-red-50 text-red-600 rounded-lg hover:bg-red-50 text-[10px] font-bold uppercase transition-colors bg-white"
                         >
-                            <Trash2 className="w-4 h-4 mr-2" />
+                            <Trash2 className="w-3.5 h-3.5 mr-2" />
                             Wipe Local Storage
                         </button>
                     </div>
@@ -182,26 +234,19 @@ USING (auth.uid() = user_id);`;
                             <Terminal className="w-6 h-6 text-slate-600" />
                         </div>
                         <div>
-                            <h2 className="text-lg font-semibold text-slate-800">Database Setup Helper</h2>
-                            <p className="text-sm text-slate-500">Configure your cloud tables</p>
+                            <h2 className="text-lg font-semibold text-slate-800">Cloud Setup Helper</h2>
+                            <p className="text-sm text-slate-500">Execute this script to activate the live cloud</p>
                         </div>
                     </div>
                     <div className={`px-3 py-1 rounded-full text-[10px] font-bold ${isDemoMode ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                        {isDemoMode ? 'PENDING ACTION' : 'FULLY CONFIGURED'}
+                        {isDemoMode ? 'OFFLINE' : 'LIVE'}
                     </div>
                 </div>
 
                 <div className="space-y-4">
                     <p className="text-sm text-slate-600 leading-relaxed">
-                        To enable multi-device sync and shared access, follow these steps to properly configure your Supabase database:
+                        To enable multi-device sync, ensure your Supabase project has the following table. This table stores the shared CRM data securely.
                     </p>
-                    
-                    <ol className="text-sm space-y-3 text-slate-600 list-decimal list-inside px-2">
-                        <li>Log in to your <strong>Supabase Dashboard</strong>.</li>
-                        <li>Navigate to the <strong>SQL Editor</strong> tab.</li>
-                        <li>Click <strong>New Query</strong> and paste the code block below.</li>
-                        <li>Click <strong>Run</strong> to create the tables and security policies.</li>
-                    </ol>
 
                     <div className="relative group">
                         <div className="absolute top-3 right-3 flex items-center space-x-2 z-10">
@@ -220,11 +265,11 @@ USING (auth.uid() = user_id);`;
                         </div>
                     </div>
 
-                    <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-4 flex items-start">
-                        <AlertTriangle className="w-5 h-5 text-indigo-600 mr-3 shrink-0" />
-                        <div className="text-xs text-indigo-800 space-y-1">
-                            <p className="font-bold">Important Security Note</p>
-                            <p>The policies above ensure users can <strong>only</strong> see data they created. Once you run this script, the "Offline" status will disappear after the next successful login.</p>
+                    <div className="bg-amber-50 border border-amber-100 rounded-lg p-4 flex items-start">
+                        <AlertTriangle className="w-5 h-5 text-amber-600 mr-3 shrink-0" />
+                        <div className="text-xs text-amber-800 space-y-1">
+                            <p className="font-bold">Sync Instructions</p>
+                            <p>After running this SQL in Supabase, <strong>every device</strong> that logs in with the same account will see the exact same data instantly.</p>
                         </div>
                     </div>
                 </div>
