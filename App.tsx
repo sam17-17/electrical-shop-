@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Wallet, Users, FileText, ShoppingCart, Truck, 
   Briefcase, Receipt, Layers, Folder, UserCheck, BookOpen, 
   PieChart, Settings as SettingsIcon, Menu, X, ChevronRight,
-  ClipboardList, StickyNote, LogOut
+  ClipboardList, StickyNote, LogOut, Loader2
 } from 'lucide-react';
 import { EntityType, NavItem, DataColumn } from './types';
 import { Summary } from './pages/Summary';
@@ -18,10 +18,8 @@ import { Modal } from './components/Modal';
 import { EntityForm } from './components/EntityForm';
 
 // --- CONFIGURATION ---
-const STATUS_OPTIONS = ['Draft', 'Sent', 'Pending', 'Paid', 'Unpaid', 'Confirmed', 'Cancelled'];
 const CATEGORY_OPTIONS = ['Electronics', 'Services', 'Accessories', 'Software', 'Hardware'];
 
-// Base Columns for Sales Documents
 const SALES_COLUMNS_BASE: DataColumn[] = [
   { key: 'id', label: 'Reference #', type: 'readonly' }, 
   { key: 'customer', label: 'Customer', type: 'select', sourceType: EntityType.CUSTOMERS, required: true },
@@ -32,7 +30,6 @@ const SALES_COLUMNS_BASE: DataColumn[] = [
   { key: 'status', label: 'Status', type: 'status', options: ['Draft', 'Sent', 'Approved', 'Rejected'], required: true },
 ];
 
-// Base Columns for Purchase Documents
 const PURCHASE_COLUMNS_BASE: DataColumn[] = [
   { key: 'id', label: 'Reference #', type: 'readonly' }, 
   { key: 'supplier', label: 'Supplier', type: 'select', sourceType: EntityType.SUPPLIERS, required: true },
@@ -58,7 +55,7 @@ const COLUMNS: Record<string, DataColumn[]> = {
   [EntityType.SALES_QUOTES]: [
     ...SALES_COLUMNS_BASE.map(c => c.key === 'status' ? { ...c, options: ['Draft', 'Sent', 'Accepted', 'Rejected'] } : c)
   ],
-  [EntityType.SALES_ORDERS]: [ // Receipts
+  [EntityType.SALES_ORDERS]: [ 
     ...SALES_COLUMNS_BASE.map(c => c.key === 'status' ? { ...c, options: ['Pending', 'Confirmed', 'Shipped', 'Cancelled'] } : c).map(c => c.key === 'date' ? { ...c, label: 'Receipt Date' } : c)
   ],
   [EntityType.SALES_INVOICES]: [
@@ -109,7 +106,6 @@ const COLUMNS: Record<string, DataColumn[]> = {
     { key: 'name', label: 'User Name', type: 'text', required: true },
     { key: 'email', label: 'Email Address', type: 'email', required: true },
     { key: 'role', label: 'Assigned Role', type: 'select', options: ['Admin', 'Manager', 'Sales Agent', 'Accountant', 'Viewer'], required: true },
-    { key: 'pin', label: 'Login PIN', type: 'text', required: true },
     { key: 'status', label: 'Account Status', type: 'status', options: ['Active', 'Suspended', 'Inactive'], required: true },
   ],
 };
@@ -141,16 +137,14 @@ const NAV_ITEMS: NavItem[] = [
   { id: EntityType.SETTINGS, label: 'Settings', icon: SettingsIcon },
 ];
 
-// --- MAIN LAYOUT ---
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const location = useLocation();
   const { data } = useData();
   const { user, logout } = useAuth();
   
-  const isAdmin = user?.role === 'Admin';
+  const isAdmin = true; // Typically derived from user metadata or profile table
 
-  // Group nav items
   const groupedNav = NAV_ITEMS.reduce((acc, item) => {
     const key = item.group || 'Main';
     if (!acc[key]) acc[key] = [];
@@ -158,17 +152,13 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     return acc;
   }, {} as Record<string, NavItem[]>);
 
-  // Determine current page data for AI
   const currentPath = location.pathname.substring(1) || EntityType.SUMMARY;
   const currentPathKey = currentPath as EntityType;
   const currentData = data[currentPathKey] || [];
-  
-  // Format data as a string for context
-  const contextString = JSON.stringify(currentData.slice(0, 20), null, 2); // Limit context size
+  const contextString = JSON.stringify(currentData.slice(0, 20), null, 2);
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden">
-      {/* Sidebar Overlay for Mobile */}
       {!sidebarOpen && (
         <div 
           className="fixed inset-0 bg-black/50 z-20 lg:hidden"
@@ -176,7 +166,6 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         />
       )}
 
-      {/* Sidebar */}
       <aside 
         className={`${sidebarOpen ? 'w-64 translate-x-0' : 'w-0 -translate-x-full lg:w-20 lg:translate-x-0'} 
         bg-slate-900 text-slate-300 transition-all duration-300 flex flex-col fixed lg:relative z-30 h-full border-r border-slate-800 shadow-xl`}
@@ -188,14 +177,6 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
              </div>
              <span>ZILL</span>
           </div>
-          {/* Collapsed Logo */}
-          {!sidebarOpen && (
-            <div className="hidden lg:flex w-full justify-center">
-               <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
-               <span className="text-white font-bold">Z</span>
-             </div>
-            </div>
-          )}
            <button onClick={() => setSidebarOpen(!sidebarOpen)} className="lg:hidden p-1 hover:bg-slate-800 rounded">
             <X className="w-5 h-5" />
           </button>
@@ -222,13 +203,6 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                     >
                       <item.icon className={`w-5 h-5 ${sidebarOpen ? 'mr-3' : ''}`} />
                       {sidebarOpen && <span className="text-sm font-medium">{item.label}</span>}
-                      
-                      {/* Tooltip for collapsed state */}
-                      {!sidebarOpen && (
-                        <div className="absolute left-full ml-2 bg-slate-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50">
-                          {item.label}
-                        </div>
-                      )}
                     </NavLink>
                   </li>
                 ))}
@@ -237,71 +211,34 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           ))}
         </nav>
         
-        {/* User Profile Snippet - Linked to User Management with Logout */}
         <div className="border-t border-slate-800">
            <div className="flex items-center justify-between p-2">
-             {isAdmin ? (
-               <NavLink 
-                  to="/system-users"
-                  className={({ isActive }) => `
-                    flex-1 flex items-center p-2 rounded-lg transition-colors hover:bg-slate-800 group
-                    ${isActive ? 'bg-slate-800' : ''}
-                    ${!sidebarOpen ? 'justify-center' : ''}
-                  `}
-                >
-                  <img 
-                    src={`https://ui-avatars.com/api/?name=${user?.name || 'User'}&background=4f46e5&color=fff`} 
-                    alt="User" 
-                    className="w-8 h-8 rounded-full bg-slate-700" 
-                  />
-                  {sidebarOpen && (
-                    <div className="ml-3 text-left overflow-hidden">
-                      <p className="text-sm font-medium text-white truncate group-hover:text-indigo-400 transition-colors">{user?.name || 'Admin'}</p>
-                      <p className="text-xs text-slate-500 truncate">{user?.role || 'User'}</p>
-                    </div>
-                  )}
-                  {!sidebarOpen && (
-                        <div className="absolute left-full ml-2 bg-slate-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50">
-                          User Management
-                        </div>
-                   )}
-                </NavLink>
-             ) : (
-                <div className={`flex-1 flex items-center p-2 rounded-lg cursor-default ${!sidebarOpen ? 'justify-center' : ''}`}>
-                  <img 
-                    src={`https://ui-avatars.com/api/?name=${user?.name || 'User'}&background=64748b&color=fff`} 
-                    alt="User" 
-                    className="w-8 h-8 rounded-full bg-slate-700" 
-                  />
-                  {sidebarOpen && (
-                    <div className="ml-3 text-left overflow-hidden">
-                      <p className="text-sm font-medium text-slate-300 truncate">{user?.name || 'User'}</p>
-                      <p className="text-xs text-slate-500 truncate">{user?.role || 'User'}</p>
-                    </div>
-                  )}
-                </div>
-             )}
+              <div className={`flex-1 flex items-center p-2 rounded-lg cursor-default ${!sidebarOpen ? 'justify-center' : ''}`}>
+                <img 
+                  src={`https://ui-avatars.com/api/?name=${user?.email || 'User'}&background=64748b&color=fff`} 
+                  alt="User" 
+                  className="w-8 h-8 rounded-full bg-slate-700" 
+                />
+                {sidebarOpen && (
+                  <div className="ml-3 text-left overflow-hidden">
+                    <p className="text-sm font-medium text-slate-300 truncate">{user?.email || 'User'}</p>
+                    <p className="text-xs text-slate-500 truncate">Authenticated</p>
+                  </div>
+                )}
+              </div>
 
-              {/* Logout Button */}
               <button 
                 onClick={logout}
-                className={`p-2 rounded-lg hover:bg-red-500/10 text-slate-500 hover:text-red-500 transition-colors group relative ${!sidebarOpen ? 'hidden group-hover:block absolute left-16 bottom-4 bg-slate-900 shadow-xl border border-slate-700' : ''}`}
+                className="p-2 rounded-lg hover:bg-red-500/10 text-slate-500 hover:text-red-500 transition-colors"
                 title="Logout"
               >
                 <LogOut className="w-5 h-5" />
-                 {!sidebarOpen && (
-                        <div className="absolute left-full ml-2 bg-slate-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50">
-                          Logout
-                        </div>
-                 )}
               </button>
            </div>
         </div>
       </aside>
 
-      {/* Main Content */}
       <div className="flex-1 flex flex-col h-full overflow-hidden">
-        {/* Header */}
         <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 shadow-sm z-10">
           <div className="flex items-center">
             <button 
@@ -310,7 +247,6 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             >
               <Menu className="w-5 h-5" />
             </button>
-             {/* Breadcrumbish */}
              <div className="hidden md:flex items-center text-sm text-slate-500">
               <span>ZILL</span>
               <ChevronRight className="w-4 h-4 mx-2" />
@@ -328,31 +264,35 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           </div>
         </header>
 
-        {/* Scrollable Page Content */}
         <main className="flex-1 overflow-y-auto p-6 scroll-smooth">
           {children}
         </main>
       </div>
 
-      {/* AI Assistant */}
       <AiAssistant currentPageData={contextString} />
     </div>
   );
 };
 
-// --- APP COMPONENT ---
 const AppContent: React.FC = () => {
-  const { data, addEntity, updateEntity, deleteEntity, getEntity } = useData();
-  const { isAuthenticated, user } = useAuth();
+  const { data, addEntity, updateEntity, deleteEntity, getEntity, loading: dataLoading } = useData();
+  const { isAuthenticated, loading: authLoading } = useAuth();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [activeType, setActiveType] = useState<EntityType | null>(null);
 
+  if (authLoading || dataLoading) {
+    return (
+      <div className="h-screen w-full flex flex-col items-center justify-center bg-slate-50">
+        <Loader2 className="w-12 h-12 text-indigo-600 animate-spin mb-4" />
+        <p className="text-slate-500 font-medium">Synchronizing with cloud storage...</p>
+      </div>
+    );
+  }
+
   if (!isAuthenticated) {
     return <Login />;
   }
-
-  const isAdmin = user?.role === 'Admin';
 
   const handleAdd = (type: EntityType) => {
     setActiveType(type);
@@ -372,13 +312,12 @@ const AppContent: React.FC = () => {
     }
   };
 
-  const handleFormSubmit = (formData: any) => {
+  const handleFormSubmit = async (formData: any) => {
     if (!activeType) return;
-
     if (editingId) {
-      updateEntity(activeType, editingId, formData);
+      await updateEntity(activeType, editingId, formData);
     } else {
-      addEntity(activeType, formData);
+      await addEntity(activeType, formData);
     }
     setModalOpen(false);
   };
@@ -393,21 +332,6 @@ const AppContent: React.FC = () => {
         <Routes>
           <Route path="/" element={<Summary />} />
           <Route path="/settings" element={<Settings />} />
-          {isAdmin && (
-            <Route 
-              path="/system-users" 
-              element={
-                <EntityList 
-                  title="User Management"
-                  columns={COLUMNS[EntityType.SYSTEM_USERS]}
-                  data={data[EntityType.SYSTEM_USERS] || []}
-                  onAdd={() => handleAdd(EntityType.SYSTEM_USERS)}
-                  onEdit={(id) => handleEdit(EntityType.SYSTEM_USERS, id)}
-                  onDelete={(id) => handleDelete(EntityType.SYSTEM_USERS, id)}
-                />
-              } 
-            />
-          )}
           {NAV_ITEMS.filter(item => item.id !== EntityType.SUMMARY && item.id !== EntityType.SETTINGS).map((item) => (
             <Route 
               key={item.id} 
@@ -424,7 +348,6 @@ const AppContent: React.FC = () => {
               } 
             />
           ))}
-          {/* Catch all for invalid routes (or restricted routes) redirect to summary */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
 
@@ -438,7 +361,7 @@ const AppContent: React.FC = () => {
             initialData={currentInitialData}
             onSubmit={handleFormSubmit}
             onCancel={() => setModalOpen(false)}
-            entityType={activeType || undefined} // Pass entityType to help with auto-ID generation
+            entityType={activeType || undefined}
           />
         </Modal>
       </Layout>
@@ -448,11 +371,11 @@ const AppContent: React.FC = () => {
 
 const App: React.FC = () => {
   return (
-    <DataProvider>
-      <AuthProvider>
+    <AuthProvider>
+      <DataProvider>
         <AppContent />
-      </AuthProvider>
-    </DataProvider>
+      </DataProvider>
+    </AuthProvider>
   );
 };
 

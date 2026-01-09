@@ -4,8 +4,8 @@ import { Lock, User, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
 
 export const Login: React.FC = () => {
   const { login } = useAuth();
-  const [username, setUsername] = useState('');
-  const [pin, setPin] = useState('');
+  const [username, setUsername] = useState('admin');
+  const [password, setPassword] = useState('1234');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -14,15 +14,11 @@ export const Login: React.FC = () => {
     setError('');
     setIsLoading(true);
 
-    // Artificial delay for better UX feel
-    setTimeout(async () => {
-      const success = await login(username, pin);
-      if (!success) {
-        setError('Invalid username or PIN');
-        setIsLoading(false);
-      }
-      // If success, App.tsx will handle the redirect based on auth state
-    }, 800);
+    const result = await login(username, password);
+    if (!result.success) {
+      setError(result.error || 'Invalid credentials');
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -59,13 +55,14 @@ export const Login: React.FC = () => {
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   className="block w-full pl-10 pr-3 py-3 border border-slate-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
-                  placeholder="Enter your username"
+                  placeholder="admin"
+                  autoFocus
                 />
               </div>
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">Access PIN</label>
+              <label className="text-sm font-medium text-slate-700">Password</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <Lock className="h-5 w-5 text-slate-400" />
@@ -73,11 +70,10 @@ export const Login: React.FC = () => {
                 <input
                   type="password"
                   required
-                  value={pin}
-                  onChange={(e) => setPin(e.target.value)}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                   className="block w-full pl-10 pr-3 py-3 border border-slate-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
                   placeholder="••••"
-                  maxLength={8}
                 />
               </div>
             </div>
@@ -99,6 +95,10 @@ export const Login: React.FC = () => {
                 </>
               )}
             </button>
+            
+            <p className="text-center text-xs text-slate-500 mt-4">
+              System access restricted to authorized personnel.
+            </p>
           </form>
         </div>
       </div>

@@ -1,261 +1,260 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { EntityType, EntityState, GenericEntity } from '../types';
+import { getSupabase } from '../services/supabase';
+import { useAuth } from './AuthContext';
 
 interface DataContextType {
   data: EntityState;
-  addEntity: (type: EntityType, entity: Omit<GenericEntity, 'id'>) => void;
-  updateEntity: (type: EntityType, id: string, entity: Partial<GenericEntity>) => void;
-  deleteEntity: (type: EntityType, id: string) => void;
+  loading: boolean;
+  addEntity: (type: EntityType, entity: Omit<GenericEntity, 'id'>) => Promise<void>;
+  updateEntity: (type: EntityType, id: string, entity: Partial<GenericEntity>) => Promise<void>;
+  deleteEntity: (type: EntityType, id: string) => Promise<void>;
   getEntity: (type: EntityType, id: string) => GenericEntity | undefined;
-  importData: (newData: EntityState) => void;
-  receivePayment: (invoiceId: string, amount: number, bankAccountId: string, date: string, reference: string) => void;
+  importData: (newData: EntityState) => Promise<void>;
+  receivePayment: (invoiceId: string, amount: number, bankAccountId: string, date: string, reference: string) => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
-// Helper to generate IDs
-const generateId = () => Math.random().toString(36).substr(2, 9);
+const INITIAL_STATE: EntityState = Object.values(EntityType).reduce((acc, type) => {
+  acc[type as EntityType] = [];
+  return acc;
+}, {} as EntityState);
 
-// Seed Data
-// CRITICAL: This initial data contains the default admin credentials.
-// Do not remove this default user, or access will be lost on a fresh load.
-const INITIAL_DATA: EntityState = {
-  [EntityType.SUMMARY]: [],
-  [EntityType.BANK_CASH]: [],
-  [EntityType.CUSTOMERS]: [],
-  [EntityType.SALES_QUOTES]: [],
-  [EntityType.SALES_ORDERS]: [],
-  [EntityType.SALES_INVOICES]: [],
-  [EntityType.DELIVERY_NOTES]: [],
-  [EntityType.SUPPLIERS]: [],
-  [EntityType.PURCHASE_QUOTES]: [],
-  [EntityType.PURCHASE_ORDERS]: [],
-  [EntityType.PURCHASE_INVOICES]: [],
-  [EntityType.INVENTORY]: [],
-  [EntityType.PROJECTS]: [],
-  [EntityType.EMPLOYEES]: [],
-  [EntityType.JOURNAL]: [],
-  [EntityType.REPORTS]: [],
-  [EntityType.SETTINGS]: [],
-  // Initialize with a default admin so the user isn't locked out
-  [EntityType.SYSTEM_USERS]: [
-    {
-      id: 'default-admin',
-      name: 'admin',
-      email: 'admin@zill.com',
-      role: 'Admin',
-      pin: '1234',
-      status: 'Active'
-    }
-  ],
-};
+const LOCAL_STORAGE_KEY = 'zill_crm_local_data';
 
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Try to load from local storage, else use initial data
-  const [data, setData] = useState<EntityState>(() => {
-    try {
-      const saved = localStorage.getItem('zill_crm_db_clean');
-      // If we have saved data, parse it.
-      if (saved) {
+  const { user, isAuthenticated, isDemoMode } = useAuth();
+  const [data, setData] = useState<EntityState>(INITIAL_STATE);
+  const [loading, setLoading] = useState(true);
+  
+  const supabase = getSupabase();
+
+  // Helper to load from local storage
+  const loadLocalData = useCallback(() => {
+    const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (saved) {
+      try {
         const parsed = JSON.parse(saved);
-        // Ensure SYSTEM_USERS exists in the saved data (backward compatibility)
-        if (!parsed[EntityType.SYSTEM_USERS] || parsed[EntityType.SYSTEM_USERS].length === 0) {
-            parsed[EntityType.SYSTEM_USERS] = INITIAL_DATA[EntityType.SYSTEM_USERS];
-        }
-        return parsed;
+        // Ensure all keys from EntityType exist
+        const merged = { ...INITIAL_STATE, ...parsed };
+        setData(merged);
+      } catch (e) {
+        console.error('Failed to parse local data', e);
+        setData(INITIAL_STATE);
       }
-      return INITIAL_DATA;
-    } catch (e) {
-      return INITIAL_DATA;
+    } else {
+      setData(INITIAL_STATE);
     }
-  });
+  }, []);
 
-  // Save to local storage whenever data changes
-  useEffect(() => {
-    localStorage.setItem('zill_crm_db_clean', JSON.stringify(data));
-  }, [data]);
-
-  // Helper to check and create customer
-  const checkAndCreateCustomer = (currentState: EntityState, entity: any) => {
-      if (!entity.customer) return currentState;
-
-      const customers = currentState[EntityType.CUSTOMERS] || [];
-      const exists = customers.find(c => c.name.toLowerCase() === entity.customer.toLowerCase());
-      
-      if (!exists) {
-          const newCustomer = {
-              id: generateId(),
-              name: entity.customer,
-              phone: entity.phone || '', // Capture phone from invoice if available
-              email: '', // Optional or allow user to fill later
-              contact: 'Main Contact'
-          };
-          return {
-              ...currentState,
-              [EntityType.CUSTOMERS]: [...customers, newCustomer]
-          };
-      }
-      return currentState;
+  // Helper to save to local storage
+  const saveLocalData = (newState: EntityState) => {
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(newState));
   };
 
-  const addEntity = (type: EntityType, entity: Omit<GenericEntity, 'id'>) => {
-    // If ID provided in entity (e.g. custom invoice number), use it, else generate one
-    const id = entity.id || generateId();
-    const newEntity = { ...entity, id };
-
-    setData((prev) => {
-      let nextState = {
-          ...prev,
-          [type]: [...(prev[type] || []), newEntity],
-      };
-
-      // AUTO-CREATE CUSTOMER LOGIC
-      if ([EntityType.SALES_INVOICES, EntityType.SALES_QUOTES, EntityType.SALES_ORDERS].includes(type)) {
-          nextState = checkAndCreateCustomer(nextState, newEntity);
-      }
-
-      return nextState;
-    });
-  };
-
-  const updateEntity = (type: EntityType, id: string, entity: Partial<GenericEntity>) => {
-    setData((prev) => {
-      const list = prev[type] || [];
-      const oldItem = list.find((item) => item.id === id);
-      
-      if (!oldItem) return prev; // Should not happen
-
-      const newItem = { ...oldItem, ...entity };
-      
-      // Update the list with the new item
-      const updatedList = list.map((item) => (item.id === id ? newItem : item));
-      
-      let nextState = {
-        ...prev,
-        [type]: updatedList,
-      };
-
-      // AUTO-CREATE CUSTOMER LOGIC ON UPDATE
-      if ([EntityType.SALES_INVOICES, EntityType.SALES_QUOTES, EntityType.SALES_ORDERS].includes(type)) {
-          nextState = checkAndCreateCustomer(nextState, newItem);
-      }
-
-      // --- AUTO-GENERATE RECEIPT LOGIC (MANUAL EDIT) ---
-      // If we are updating a Sales Invoice, and the status changes to 'Paid'
-      // and it wasn't 'Paid' before, create a Receipt (SALES_ORDERS).
-      if (type === EntityType.SALES_INVOICES && newItem.status === 'Paid' && oldItem.status !== 'Paid') {
-        
-        // Generate a Receipt Number
-        const existingReceipts = nextState[EntityType.SALES_ORDERS] || [];
-        const receiptId = `RCP-${existingReceipts.length + 2001}`;
-
-        const receipt: GenericEntity = {
-          id: receiptId,
-          customer: newItem.customer,
-          phone: newItem.phone, // Carry over phone
-          date: new Date().toISOString().split('T')[0], // Today's date
-          amount: newItem.amount,
-          status: 'Confirmed',
-          items: newItem.items, // Copy line items for the receipt
-          description: `Auto-generated receipt for Invoice #${newItem.id || 'N/A'}.`,
-        };
-
-        // Add to SALES_ORDERS (which is mapped to Receipts in the UI)
-        nextState = {
-          ...nextState,
-          [EntityType.SALES_ORDERS]: [...(nextState[EntityType.SALES_ORDERS] || []), receipt]
-        };
-      }
-      // -----------------------------------
-
-      return nextState;
-    });
-  };
-
-  const receivePayment = (invoiceId: string, amount: number, bankAccountId: string, date: string, reference: string) => {
-      setData((prev) => {
-          // 1. Find the Invoice
-          const invoices = prev[EntityType.SALES_INVOICES] || [];
-          const targetInvoice = invoices.find(inv => inv.id === invoiceId);
-          if (!targetInvoice) return prev;
-
-          // 2. Calculate new totals
-          const currentPaid = targetInvoice.amountPaid || 0;
-          const newTotalPaid = Number(currentPaid) + Number(amount);
-          
-          // Determine Status: Only 'Paid' if fully paid, otherwise 'Pending' (acting as Partial)
-          // We check with a small epsilon for floating point safety, or just >=
-          const newStatus = newTotalPaid >= targetInvoice.amount ? 'Paid' : 'Pending';
-
-          const updatedInvoice: GenericEntity = { 
-              ...targetInvoice, 
-              status: newStatus,
-              amountPaid: newTotalPaid 
-          };
-          
-          const updatedInvoices = invoices.map(inv => inv.id === invoiceId ? updatedInvoice : inv);
-
-          // 3. Create Receipt (Sales Order)
-          const existingReceipts = prev[EntityType.SALES_ORDERS] || [];
-          const receiptId = `RCP-${existingReceipts.length + 3001}`;
-          
-          const isPartial = newStatus !== 'Paid';
-          
-          const newReceipt: GenericEntity = {
-              id: receiptId,
-              customer: updatedInvoice.customer,
-              phone: updatedInvoice.phone,
-              date: date,
-              amount: amount, // The amount received NOW, not the total invoice amount
-              status: 'Confirmed',
-              items: updatedInvoice.items, // We keep items for reference, but amount matches payment
-              description: `${isPartial ? 'Partial ' : ''}Payment Received via ${reference}. Linked to Invoice ${invoiceId}. Balance Remaining: ${Math.max(0, updatedInvoice.amount - newTotalPaid)}`,
-          };
-          const updatedReceipts = [...existingReceipts, newReceipt];
-
-          // 4. Update Bank/Cash Balance
-          const bankAccounts = prev[EntityType.BANK_CASH] || [];
-          const targetAccount = bankAccounts.find(acc => acc.id === bankAccountId);
-          let updatedBankAccounts = bankAccounts;
-
-          if (targetAccount) {
-              const newBalance = Number(targetAccount.balance || 0) + Number(amount);
-              const updatedAccount = { ...targetAccount, balance: newBalance };
-              updatedBankAccounts = bankAccounts.map(acc => acc.id === bankAccountId ? updatedAccount : acc);
-          }
-
-          return {
-              ...prev,
-              [EntityType.SALES_INVOICES]: updatedInvoices,
-              [EntityType.SALES_ORDERS]: updatedReceipts,
-              [EntityType.BANK_CASH]: updatedBankAccounts,
-          };
-      });
-  };
-
-  const deleteEntity = (type: EntityType, id: string) => {
-    // PROTECT DEFAULT ADMIN credentials from being deleted
-    if (type === EntityType.SYSTEM_USERS && id === 'default-admin') {
-      alert("System Safeguard: Cannot delete the default administrator account.");
+  const fetchData = useCallback(async () => {
+    if (!isAuthenticated || !user) {
+      setData(INITIAL_STATE);
+      setLoading(false);
       return;
     }
 
-    setData((prev) => ({
-      ...prev,
-      [type]: prev[type].filter((item) => item.id !== id),
-    }));
+    setLoading(true);
+
+    // If in Demo Mode, always use Local Storage
+    if (isDemoMode) {
+      loadLocalData();
+      setLoading(false);
+      return;
+    }
+
+    // Try Supabase if available
+    if (supabase) {
+      try {
+        const { data: dbData, error } = await supabase
+          .from('crm_entities')
+          .select('*')
+          .eq('user_id', user.id);
+
+        if (error) {
+          // If table doesn't exist, fall back to local storage instead of erroring out
+          console.warn('Supabase fetch issue (likely missing table). Falling back to local storage:', error.message);
+          loadLocalData();
+        } else {
+          const groupedData = { ...INITIAL_STATE };
+          dbData?.forEach((row) => {
+            const type = row.type as EntityType;
+            if (groupedData[type]) {
+              groupedData[type].push({ ...row.content, id: row.id });
+            }
+          });
+          setData(groupedData);
+        }
+      } catch (e) {
+        console.error('Unexpected error fetching data:', e);
+        loadLocalData();
+      }
+    } else {
+      loadLocalData();
+    }
+    setLoading(false);
+  }, [isAuthenticated, user, supabase, isDemoMode, loadLocalData]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const addEntity = async (type: EntityType, entity: Omit<GenericEntity, 'id'>) => {
+    const id = (entity as any).id || Math.random().toString(36).substr(2, 9);
+    const newEntity = { ...entity, id };
+
+    if (isDemoMode || !supabase) {
+      const newState = { ...data, [type]: [...data[type], newEntity] };
+      setData(newState);
+      saveLocalData(newState);
+      return;
+    }
+
+    const content = { ...entity };
+    delete (content as any).id;
+
+    const { error } = await supabase
+      .from('crm_entities')
+      .insert([{ id, type, content, user_id: user.id }]);
+
+    if (error) {
+      console.error('Error adding entity:', error);
+      // Fail over to local state for UX continuity
+      const newState = { ...data, [type]: [...data[type], newEntity] };
+      setData(newState);
+      throw error;
+    }
+    await fetchData();
+  };
+
+  const updateEntity = async (type: EntityType, id: string, entity: Partial<GenericEntity>) => {
+    const currentItems = data[type];
+    const updatedItems = currentItems.map(item => item.id === id ? { ...item, ...entity } : item);
+    const newState = { ...data, [type]: updatedItems };
+
+    if (isDemoMode || !supabase) {
+      setData(newState);
+      saveLocalData(newState);
+      return;
+    }
+    
+    const target = updatedItems.find(i => i.id === id);
+    if (!target) return;
+
+    const content = { ...target };
+    delete content.id;
+
+    const { error } = await supabase
+      .from('crm_entities')
+      .update({ content })
+      .eq('id', id)
+      .eq('user_id', user.id);
+
+    if (error) {
+      console.error('Error updating entity:', error);
+      setData(newState); // Optimistic local update
+      throw error;
+    }
+    await fetchData();
+  };
+
+  const deleteEntity = async (type: EntityType, id: string) => {
+    const newState = { ...data, [type]: data[type].filter(i => i.id !== id) };
+
+    if (isDemoMode || !supabase) {
+      setData(newState);
+      saveLocalData(newState);
+      return;
+    }
+
+    const { error } = await supabase
+      .from('crm_entities')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', user.id);
+
+    if (error) {
+      console.error('Error deleting entity:', error);
+      setData(newState); // Optimistic local delete
+      throw error;
+    }
+    await fetchData();
+  };
+
+  const receivePayment = async (invoiceId: string, amount: number, bankAccountId: string, date: string, reference: string) => {
+    const invoice = data[EntityType.SALES_INVOICES].find(i => i.id === invoiceId);
+    const bank = data[EntityType.BANK_CASH].find(i => i.id === bankAccountId);
+    if (!invoice) return;
+
+    const newAmountPaid = Number(invoice.amountPaid || 0) + amount;
+    const newStatus = newAmountPaid >= invoice.amount ? 'Paid' : 'Unpaid';
+
+    await updateEntity(EntityType.SALES_INVOICES, invoiceId, {
+      amountPaid: newAmountPaid,
+      status: newStatus
+    });
+
+    const receiptId = `RCP-${Date.now()}`;
+    await addEntity(EntityType.SALES_ORDERS, {
+      id: receiptId,
+      customer: invoice.customer,
+      phone: invoice.phone,
+      date,
+      amount,
+      status: 'Confirmed',
+      items: invoice.items,
+      description: `Payment via ${reference}. Linked to Inv ${invoiceId}.`
+    });
+
+    if (bank) {
+      await updateEntity(EntityType.BANK_CASH, bankAccountId, {
+        balance: Number(bank.balance || 0) + amount
+      });
+    }
   };
 
   const getEntity = (type: EntityType, id: string) => {
     return data[type]?.find((item) => item.id === id);
   };
 
-  const importData = (newData: EntityState) => {
-    setData(newData);
+  const importData = async (newData: EntityState) => {
+    if (isDemoMode || !supabase) {
+      setData(newData);
+      saveLocalData(newData);
+      return;
+    }
+
+    try {
+      await supabase.from('crm_entities').delete().eq('user_id', user.id);
+      
+      for (const [type, items] of Object.entries(newData)) {
+        if (items.length > 0) {
+          const rows = items.map(item => ({
+            id: item.id || Math.random().toString(36).substr(2, 9),
+            type,
+            content: { ...item },
+            user_id: user.id
+          }));
+          rows.forEach(r => delete r.content.id);
+          await supabase.from('crm_entities').insert(rows);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to import to cloud, saving locally', e);
+      setData(newData);
+      saveLocalData(newData);
+    }
+    await fetchData();
   };
 
   return (
-    <DataContext.Provider value={{ data, addEntity, updateEntity, deleteEntity, getEntity, importData, receivePayment }}>
+    <DataContext.Provider value={{ data, loading, addEntity, updateEntity, deleteEntity, getEntity, importData, receivePayment }}>
       {children}
     </DataContext.Provider>
   );
