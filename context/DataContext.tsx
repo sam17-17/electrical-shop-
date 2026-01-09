@@ -99,7 +99,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setData(groupedData);
 
           // Automatic Sync Logic: If cloud is empty but local has data, sync it once
-          // FIX: Explicitly cast dbData to any[] to ensure the .length property is accessible on narrowed array types.
+          // Fix: Properly cast dbData to any[] and check length safely.
           if (Array.isArray(dbData) && (dbData as any[]).length === 0 && !autoSyncDone.current) {
             const localData = loadLocalData();
             const hasData = Object.values(localData).some(arr => arr.length > 0);
@@ -169,7 +169,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .insert([{ id, type, content, user_id: user.id }]);
 
     if (error) {
-      if (error.message.includes("Could not find the table")) {
+      if (error.message.includes("Could find the table")) {
         setDbNeedsSetup(true);
       } else {
         setData(oldState); // Rollback on non-setup error

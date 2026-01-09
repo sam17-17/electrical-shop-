@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { getSupabase } from '../services/supabase';
-import { ShieldAlert, Terminal, Cloud, CloudOff } from 'lucide-react';
 
 interface AuthContextType {
   user: any | null;
@@ -25,13 +24,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     const checkSession = async () => {
-      // 1. Check Local Mock Session first
-      const savedMockUser = localStorage.getItem('zill_mock_user');
-      if (savedMockUser) {
-        setUser(JSON.parse(savedMockUser));
-        setIsDemoMode(true);
-        setLoading(false);
-        return;
+      const savedUser = localStorage.getItem('zill_active_user');
+      if (savedUser) {
+        try {
+          const parsed = JSON.parse(savedUser);
+          setUser(parsed);
+          setIsDemoMode(parsed.isDemo || false);
+          setLoading(false);
+          return;
+        } catch (e) {
+          localStorage.removeItem('zill_active_user');
+        }
       }
 
       if (!supabase) {
@@ -39,11 +42,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-      // 2. Check Supabase active session
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
-          setUser(session.user);
+          const u = { 
+            id: session.user.id, 
+            email: session.user.email, 
+            username: session.user.user_metadata?.full_name || session.user.email,
+            role: session.user.user_metadata?.role || 'Admin',
+            isDemo: false
+          };
+          setUser(u);
           setIsDemoMode(false);
         }
       } catch (e) {
@@ -53,40 +62,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     checkSession();
-
-    // Listen for auth changes
-    let subscription: any;
-    if (supabase) {
-      const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-        if (session?.user) {
-          setUser(session.user);
-          setIsDemoMode(false);
-          localStorage.removeItem('zill_mock_user');
-        } else if (!localStorage.getItem('zill_mock_user')) {
-          setUser(null);
-        }
-      });
-      subscription = data.subscription;
-    }
-
-    return () => subscription?.unsubscribe();
   }, [supabase]);
 
   const signUp = async (email: string, password: string, fullName: string) => {
     if (!supabase) return { success: false, error: 'Cloud service unavailable' };
-    
     try {
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: {
-          data: {
-            full_name: fullName,
-            role: 'Admin'
-          }
-        }
+        options: { data: { full_name: fullName, role: 'Admin' } }
       });
-
       if (error) return { success: false, error: error.message };
       return { success: true };
     } catch (e: any) {
@@ -95,75 +80,105 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const login = async (username: string, password: string) => {
-    const isDefaultAdmin = username === 'admin' && password === '1234';
+    // 1. Check Local Demo Admin (Only for testing without cloud)
+    if (username === 'admin' && password === '1234') {
+      const mockUser = { id: 'mock-admin', email: 'admin@zill.com', username: 'Local Admin', role: 'Admin', isDemo: true };
+      setUser(mockUser);
+      setIsDemoMode(true);
+      localStorage.setItem('zill_active_user', JSON.stringify(mockUser));
+      return { success: true };
+    }
 
-    if (supabase) {
-      const email = username.includes('@') ? username : `${username}@zill.com`;
-      try {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
+    if (!supabase) return { success: false, error: 'Cloud database not connected' };
 
-        if (!error) {
-          setIsDemoMode(false);
-          localStorage.removeItem('zill_mock_user');
+    try {
+      // 2. Fetch all system users from CLOUD
+      const { data: virtualUsers, error: vError } = await supabase
+        .from('crm_entities')
+        .select('*')
+        .eq('type', 'system-users');
+
+      // 3. Cloud Bootstrap Logic: If database has NO users, allow the first superadmin to enter and seed
+      if (!vError && virtualUsers && virtualUsers.length === 0) {
+        if ((username === 'superadmin' || username === 'superadmin@zill.com') && password === 'admin2025') {
+          const cloudAdmin = { 
+            id: 'cloud-seed-admin', 
+            email: 'superadmin@zill.com', 
+            username: 'Super Admin', 
+            role: 'Admin', 
+            isVirtual: true, 
+            isDemo: false 
+          };
+          
+          // Try to seed the user record in the cloud immediately so it's "Stored in Cloud" for next time
+          try {
+            await supabase.from('crm_entities').insert([{
+               id: 'cloud-seed-admin',
+               type: 'system-users',
+               content: { name: 'Super Admin', email: 'superadmin@zill.com', pin: 'admin2025', role: 'Admin', status: 'Active' }
+            }]);
+          } catch(e) { /* Table might not exist yet */ }
+
+          setUser(cloudAdmin);
+          localStorage.setItem('zill_active_user', JSON.stringify(cloudAdmin));
           return { success: true };
         }
-      } catch (e) {
-        console.error("Login attempt failed", e);
       }
 
-      // Bypass if default admin
-      if (isDefaultAdmin) {
-        const mockUser = { 
-          id: 'mock-admin-id', 
-          email: 'admin@zill.com', 
-          user_metadata: { role: 'Admin', full_name: 'System Administrator' } 
-        };
-        setUser(mockUser);
-        setIsDemoMode(true);
-        localStorage.setItem('zill_mock_user', JSON.stringify(mockUser));
-        return { success: true };
+      // 4. Verify Virtual User Credentials against CLOUD data
+      if (!vError && virtualUsers) {
+        const match = virtualUsers.find(v => 
+          (v.content.email?.toLowerCase() === username.toLowerCase() || v.content.name?.toLowerCase() === username.toLowerCase()) && 
+          String(v.content.pin) === String(password)
+        );
+
+        if (match) {
+          if (match.content.status === 'Suspended') return { success: false, error: 'Account suspended.' };
+          const virtualUser = {
+            id: match.id,
+            email: match.content.email,
+            username: match.content.name,
+            role: match.content.role || 'Viewer',
+            isVirtual: true,
+            isDemo: false
+          };
+          setUser(virtualUser);
+          localStorage.setItem('zill_active_user', JSON.stringify(virtualUser));
+          return { success: true };
+        }
       }
 
-      return { success: false, error: 'Invalid credentials. Use admin / 1234 for local access.' };
-    } else {
-      if (isDefaultAdmin) {
-        const mockUser = { 
-          id: 'mock-admin-id', 
-          email: 'admin@zill.com',
-          user_metadata: { role: 'Admin' }
+      // 5. Fallback: Standard Supabase Auth
+      const email = username.includes('@') ? username : `${username}@zill.com`;
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ email, password });
+      if (!authError && authData.user) {
+        const u = { 
+          id: authData.user.id, 
+          email: authData.user.email, 
+          username: authData.user.user_metadata?.full_name || authData.user.email,
+          role: authData.user.user_metadata?.role || 'Admin',
+          isDemo: false
         };
-        setUser(mockUser);
-        setIsDemoMode(true);
-        localStorage.setItem('zill_mock_user', JSON.stringify(mockUser));
+        setUser(u);
+        localStorage.setItem('zill_active_user', JSON.stringify(u));
         return { success: true };
       }
-      return { success: false, error: 'Database connection failed. Contact support.' };
+    } catch (e) {
+      console.error("Cloud login error", e);
     }
+
+    return { success: false, error: 'Invalid cloud credentials.' };
   };
 
   const logout = async () => {
-    localStorage.removeItem('zill_mock_user');
+    localStorage.removeItem('zill_active_user');
     setIsDemoMode(false);
     setUser(null);
-    if (supabase) {
-      await supabase.auth.signOut();
-    }
+    if (supabase) await supabase.auth.signOut();
   };
 
   return (
-    <AuthContext.Provider value={{ 
-      user, 
-      login, 
-      signUp,
-      logout, 
-      isAuthenticated: !!user,
-      loading,
-      configError,
-      isDemoMode
-    }}>
+    <AuthContext.Provider value={{ user, login, signUp, logout, isAuthenticated: !!user, loading, configError, isDemoMode }}>
       {children}
     </AuthContext.Provider>
   );
@@ -171,8 +186,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
+  if (!context) throw new Error('useAuth must be used within an AuthProvider');
   return context;
 };
