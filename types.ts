@@ -30,7 +30,7 @@ export interface LineItem {
 export interface DataColumn {
   key: string;
   label: string;
-  type: 'text' | 'currency' | 'date' | 'status' | 'number' | 'select' | 'email' | 'phone' | 'textarea' | 'items' | 'readonly';
+  type: 'text' | 'currency' | 'date' | 'status' | 'number' | 'select' | 'email' | 'phone' | 'textarea' | 'items' | 'readonly' | 'password';
   options?: string[]; // For select/status types
   sourceType?: EntityType; // For dynamic entity lookups
   required?: boolean;

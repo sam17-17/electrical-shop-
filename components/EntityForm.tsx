@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { DataColumn, GenericEntity, LineItem, EntityType } from '../types';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, RefreshCw, Key } from 'lucide-react';
 import { useData } from '../context/DataContext';
 
 interface EntityFormProps {
@@ -69,15 +69,10 @@ export const EntityForm: React.FC<EntityFormProps> = ({ columns, initialData, on
         // Auto-fill logic for Source Types (e.g. Selecting a Customer autofills Phone)
         if (column?.sourceType) {
             const sourceList = data[column.sourceType] || [];
-            // Find the entity matches the selected name
             const match = sourceList.find((item: any) => item.name === value);
             
             if (match) {
-                // Loop through other columns in this form
                 columns.forEach(targetCol => {
-                    // If the target column exists in the matched entity (by key), autofill it
-                    // e.g. If Customer has 'phone' and Invoice has 'phone', fill it.
-                    // We skip the key itself, ID, and items.
                     if (targetCol.key !== key && targetCol.key !== 'id' && targetCol.type !== 'items') {
                          if (match[targetCol.key] !== undefined && match[targetCol.key] !== null) {
                              newData[targetCol.key] = match[targetCol.key];
@@ -89,6 +84,11 @@ export const EntityForm: React.FC<EntityFormProps> = ({ columns, initialData, on
         
         return newData;
     });
+  };
+
+  const generatePin = () => {
+    const pin = Math.floor(1000 + Math.random() * 9000).toString();
+    handleChange('pin', pin);
   };
 
   // --- LINE ITEM LOGIC ---
@@ -119,7 +119,6 @@ export const EntityForm: React.FC<EntityFormProps> = ({ columns, initialData, on
       if (item.id === itemId) {
         let updatedItem = { ...item, [field]: value };
         
-        // Auto-populate price if description changes and matches inventory
         if (field === 'description') {
            const inventoryMatch = inventoryItems.find(inv => inv.name === value || inv.code === value);
            if (inventoryMatch) {
@@ -127,9 +126,7 @@ export const EntityForm: React.FC<EntityFormProps> = ({ columns, initialData, on
            }
         }
 
-        // Auto calc total
         if (field === 'quantity' || field === 'unitPrice' || field === 'description') {
-            // Re-calculate total based on current (potentially new) qty and price
             updatedItem.total = Number(updatedItem.quantity) * Number(updatedItem.unitPrice);
         }
         return updatedItem;
@@ -155,7 +152,6 @@ export const EntityForm: React.FC<EntityFormProps> = ({ columns, initialData, on
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       {columns.map((col) => {
-        // Handle Readonly fields
         if (col.type === 'readonly') {
              return (
                 <div key={col.key} className="flex flex-col space-y-1.5">
@@ -170,7 +166,6 @@ export const EntityForm: React.FC<EntityFormProps> = ({ columns, initialData, on
              );
         }
 
-        // Handle Line Items Table
         if (col.type === 'items') {
             return (
                 <div key={col.key} className="space-y-2 border-t border-b border-slate-100 py-4 my-2">
@@ -181,7 +176,6 @@ export const EntityForm: React.FC<EntityFormProps> = ({ columns, initialData, on
                         </button>
                     </div>
                     
-                    {/* Datalist for Inventory Lookup */}
                     <datalist id="inventory-list">
                         {inventoryItems.map(item => (
                             <option key={item.id} value={item.name}>
@@ -250,7 +244,6 @@ export const EntityForm: React.FC<EntityFormProps> = ({ columns, initialData, on
             );
         }
 
-        // Skip manual Amount input if it's being calculated from items
         if (col.key === 'amount' && columns.some(c => c.type === 'items')) {
             const subTotal = (formData.items || []).reduce((sum: number, item: LineItem) => sum + item.total, 0);
             const vat = subTotal * 0.18;
@@ -280,7 +273,7 @@ export const EntityForm: React.FC<EntityFormProps> = ({ columns, initialData, on
             );
         }
 
-        if (col.key === 'id') return null; // Don't edit IDs manually if not readonly type
+        if (col.key === 'id') return null;
 
         return (
           <div key={col.key} className="flex flex-col space-y-1.5">
@@ -288,7 +281,6 @@ export const EntityForm: React.FC<EntityFormProps> = ({ columns, initialData, on
               {col.label} {col.required && <span className="text-red-500">*</span>}
             </label>
             
-            {/* Unified Combobox (Input + Datalist) for Select types */}
             {col.type === 'select' && (
               <div className="relative">
                  <input
@@ -302,12 +294,10 @@ export const EntityForm: React.FC<EntityFormProps> = ({ columns, initialData, on
                     autoComplete="off"
                  />
                  <datalist id={`list-${col.key}`}>
-                    {/* Source from EntityType (e.g. Customers) */}
                     {col.sourceType && (data[col.sourceType] || []).map((entity: any) => (
                         <option key={entity.id} value={entity.name} />
                     ))}
                     
-                    {/* Source from static options (e.g. Categories, Roles) */}
                     {(!col.sourceType && col.options) && col.options.map((opt: string) => (
                         <option key={opt} value={opt} />
                     ))}
@@ -338,8 +328,32 @@ export const EntityForm: React.FC<EntityFormProps> = ({ columns, initialData, on
                 className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm transition-all"
               />
             )}
+
+            {col.type === 'password' && (
+              <div className="relative group/pin">
+                <input
+                  type="password"
+                  required={col.required}
+                  value={formData[col.key] || ''}
+                  onChange={(e) => handleChange(col.key, e.target.value, col)}
+                  className="w-full pl-10 pr-12 py-2 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm transition-all"
+                  placeholder="Enter 4-digit PIN"
+                />
+                <div className="absolute left-3 top-2.5 text-slate-400">
+                  <Key className="w-4 h-4" />
+                </div>
+                <button
+                  type="button"
+                  onClick={generatePin}
+                  className="absolute right-2 top-1.5 p-1.5 text-indigo-500 hover:bg-indigo-50 rounded-md transition-colors"
+                  title="Generate Random PIN"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                </button>
+              </div>
+            )}
             
-            {(col.type !== 'select' && col.type !== 'status' && col.type !== 'textarea') && (
+            {(col.type !== 'select' && col.type !== 'status' && col.type !== 'textarea' && col.type !== 'password') && (
               <input
                 type={col.type === 'currency' ? 'number' : col.type}
                 step={col.type === 'currency' ? '0.01' : undefined}

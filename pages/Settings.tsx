@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { 
   Download, Upload, Trash2, Database, Save, ArrowLeft, 
   Terminal, Copy, Check, Cloud, CloudOff, Info, AlertTriangle, ChevronRight,
-  Share2, ArrowUpCircle
+  Share2, ArrowUpCircle, Zap
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -16,23 +16,31 @@ export const Settings: React.FC = () => {
   const [copied, setCopied] = useState(false);
   const [isMigrating, setIsMigrating] = useState(false);
 
-  const sqlSchema = `-- Run this in your Supabase SQL Editor to enable Cloud Sync
+  const sqlSchema = `-- 1. Create the Shared Entities Table
 CREATE TABLE IF NOT EXISTS public.crm_entities (
     id TEXT PRIMARY KEY,
     type TEXT NOT NULL,
     content JSONB NOT NULL DEFAULT '{}'::jsonb,
-    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES auth.users(id),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- Enable Row Level Security
+-- 2. Enable Row Level Security
 ALTER TABLE public.crm_entities ENABLE ROW LEVEL SECURITY;
 
--- Create Policies
-CREATE POLICY "Users can manage their own data" 
+-- 3. Create SHARED ORGANIZATION POLICY
+-- This allows any logged-in user in your team to see and edit all records.
+DROP POLICY IF EXISTS "Shared team access" ON public.crm_entities;
+CREATE POLICY "Shared team access" 
 ON public.crm_entities 
 FOR ALL 
-USING (auth.uid() = user_id);`;
+TO authenticated 
+USING (true)
+WITH CHECK (true);
+
+-- 4. ENABLE REALTIME
+-- Execute this to allow the app to broadcast changes instantly to all PCs
+ALTER PUBLICATION supabase_realtime ADD TABLE crm_entities;`;
 
   const handleCopySql = () => {
     navigator.clipboard.writeText(sqlSchema);
@@ -92,9 +100,8 @@ USING (auth.uid() = user_id);`;
     
     setIsMigrating(true);
     try {
-      // Re-trigger import data which now pushes to Supabase for the active user
       await importData(data);
-      alert("Success! Your local data has been pushed to your cloud account. You can now access this data from any other device by logging in.");
+      alert("Success! Your data has been pushed to the cloud. Other team members can now see these records instantly.");
     } catch (e) {
       alert("Sync failed. Ensure your database is properly configured in the helper section.");
     } finally {
@@ -113,8 +120,8 @@ USING (auth.uid() = user_id);`;
             <ArrowLeft className="w-5 h-5" />
         </button>
         <div>
-            <h1 className="text-2xl font-bold text-slate-900">Cloud & Data Settings</h1>
-            <p className="text-slate-500">Enable multi-device synchronization and sharing</p>
+            <h1 className="text-2xl font-bold text-slate-900">Live Team Sync</h1>
+            <p className="text-slate-500">Collaborate with your team across multiple devices</p>
         </div>
       </div>
 
@@ -130,66 +137,44 @@ USING (auth.uid() = user_id);`;
                     </div>
                     <div>
                         <h2 className="text-lg font-semibold text-slate-800">
-                            {isDemoMode ? 'Local Persistence' : 'Cloud Sync Active'}
+                            {isDemoMode ? 'Offline Mode' : 'Cloud Sharing Active'}
                         </h2>
                         <p className={`text-xs ${isDemoMode ? 'text-amber-700' : 'text-emerald-700'}`}>
-                            {isDemoMode ? 'Changes saved to browser only' : 'Encrypted cloud backup enabled'}
+                            {isDemoMode ? 'Personal data only' : 'Shared team database'}
                         </p>
                     </div>
                 </div>
                 
-                {isDemoMode && (
-                    <div className="bg-white/50 p-3 rounded-lg border border-amber-100 mb-4 text-xs text-amber-800 flex items-start">
-                        <Info className="w-4 h-4 mr-2 shrink-0 mt-0.5" />
-                        <p>You are in <strong>Local Demo Mode</strong>. Data is only stored on this PC. To share with other PCs, you need to sign up for a real account.</p>
-                    </div>
-                )}
-                
                 {!isDemoMode && (
                     <div className="space-y-4">
-                        <div className="flex items-center text-xs text-emerald-700 font-medium">
-                            <div className="w-2 h-2 rounded-full bg-emerald-500 mr-2 animate-pulse"></div>
-                            Connected to live database
+                        <div className="flex items-center text-xs text-emerald-700 font-bold">
+                            <Zap className="w-3 h-3 mr-2 animate-pulse" />
+                            REAL-TIME BROADCAST ENABLED
                         </div>
                         <button 
                           onClick={handleSyncToCloud}
                           disabled={isMigrating}
-                          className="w-full flex items-center justify-center py-2 bg-emerald-600 text-white rounded-lg text-sm font-bold shadow-lg hover:bg-emerald-700 transition-all disabled:opacity-50"
+                          className="w-full flex items-center justify-center py-2.5 bg-indigo-600 text-white rounded-lg text-sm font-bold shadow-lg hover:bg-indigo-700 transition-all disabled:opacity-50"
                         >
                           <ArrowUpCircle className="w-4 h-4 mr-2" />
-                          {isMigrating ? 'Syncing...' : 'Push Local Data to Cloud'}
+                          {isMigrating ? 'Syncing...' : 'Sync Local to Shared Pool'}
                         </button>
+                    </div>
+                )}
+
+                {isDemoMode && (
+                   <div className="bg-white/50 p-3 rounded-lg border border-amber-100 text-xs text-amber-800 flex items-start">
+                        <Info className="w-4 h-4 mr-2 shrink-0 mt-0.5" />
+                        <p>Sign up for a Cloud Account to start sharing data with other PCs.</p>
                     </div>
                 )}
             </div>
 
-            {/* Sharing Guide */}
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                <h3 className="font-bold text-slate-800 mb-4 flex items-center">
-                    <Share2 className="w-4 h-4 mr-2 text-indigo-600" />
-                    How to Share
-                </h3>
-                <div className="text-xs text-slate-600 space-y-4 leading-relaxed">
-                   <div className="flex gap-3">
-                      <div className="w-6 h-6 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center shrink-0 font-bold text-indigo-600">1</div>
-                      <p>Go to the login screen and <strong>Sign Up</strong> for a real cloud account.</p>
-                   </div>
-                   <div className="flex gap-3">
-                      <div className="w-6 h-6 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center shrink-0 font-bold text-indigo-600">2</div>
-                      <p>On this page, click <strong>"Push Local Data to Cloud"</strong> to upload your work.</p>
-                   </div>
-                   <div className="flex gap-3">
-                      <div className="w-6 h-6 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center shrink-0 font-bold text-indigo-600">3</div>
-                      <p>Open this app on any other PC and log in with the <strong>same account</strong>.</p>
-                   </div>
-                </div>
-            </div>
-
             {/* Persistence Card */}
             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                <h3 className="font-bold text-slate-800 mb-4 flex items-center text-sm">
-                    <Database className="w-4 h-4 mr-2" />
-                    Data Operations
+                <h3 className="font-bold text-slate-800 mb-4 flex items-center text-sm uppercase tracking-wider">
+                    <Database className="w-4 h-4 mr-2 text-slate-400" />
+                    Offline Backup
                 </h3>
 
                 <div className="space-y-3">
@@ -211,16 +196,6 @@ USING (auth.uid() = user_id);`;
                             <ChevronRight className="w-3 h-3 text-slate-300" />
                         </button>
                     </div>
-
-                    <div className="pt-4 border-t border-slate-100">
-                        <button 
-                            onClick={handleClearData}
-                            className="w-full flex items-center justify-center px-4 py-2 border border-red-50 text-red-600 rounded-lg hover:bg-red-50 text-[10px] font-bold uppercase transition-colors bg-white"
-                        >
-                            <Trash2 className="w-3.5 h-3.5 mr-2" />
-                            Wipe Local Storage
-                        </button>
-                    </div>
                 </div>
             </div>
         </div>
@@ -230,47 +205,54 @@ USING (auth.uid() = user_id);`;
             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                 <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center">
-                        <div className="p-2 bg-slate-100 rounded-lg mr-3">
-                            <Terminal className="w-6 h-6 text-slate-600" />
+                        <div className="p-2 bg-indigo-50 rounded-lg mr-3">
+                            <Share2 className="w-6 h-6 text-indigo-600" />
                         </div>
                         <div>
-                            <h2 className="text-lg font-semibold text-slate-800">Cloud Setup Helper</h2>
-                            <p className="text-sm text-slate-500">Execute this script to activate the live cloud</p>
+                            <h2 className="text-lg font-semibold text-slate-800">Team Sharing Setup</h2>
+                            <p className="text-sm text-slate-500">Run this to allow shared access and real-time sync</p>
                         </div>
                     </div>
-                    <div className={`px-3 py-1 rounded-full text-[10px] font-bold ${isDemoMode ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                        {isDemoMode ? 'OFFLINE' : 'LIVE'}
+                    <div className={`px-3 py-1 rounded-full text-[10px] font-bold ${isDemoMode ? 'bg-amber-100 text-amber-700' : 'bg-indigo-100 text-indigo-700'}`}>
+                        {isDemoMode ? 'OFFLINE' : 'LIVE SYNC'}
                     </div>
                 </div>
 
                 <div className="space-y-4">
-                    <p className="text-sm text-slate-600 leading-relaxed">
-                        To enable multi-device sync, ensure your Supabase project has the following table. This table stores the shared CRM data securely.
-                    </p>
+                    <div className="bg-slate-900 rounded-xl p-6 font-mono text-xs overflow-x-auto border border-slate-800 relative group">
+                        <button 
+                            onClick={handleCopySql}
+                            className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors"
+                        >
+                            {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                        </button>
+                        <pre className="text-indigo-300 leading-relaxed">
+                            {sqlSchema}
+                        </pre>
+                    </div>
 
-                    <div className="relative group">
-                        <div className="absolute top-3 right-3 flex items-center space-x-2 z-10">
-                            <button 
-                                onClick={handleCopySql}
-                                className="flex items-center space-x-1 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold rounded-md transition-all shadow-lg"
-                            >
-                                {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                                <span>{copied ? 'Copied!' : 'Copy SQL'}</span>
-                            </button>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-4">
+                            <h4 className="text-emerald-800 font-bold text-xs uppercase mb-2">Step 1: Permissions</h4>
+                            <p className="text-emerald-700 text-xs leading-relaxed">
+                                The SQL above allows every member of your team (authenticated users) to see the shared data.
+                            </p>
                         </div>
-                        <div className="bg-slate-900 rounded-xl p-6 font-mono text-xs overflow-x-auto border border-slate-800 shadow-inner max-h-[300px] custom-scrollbar">
-                            <pre className="text-indigo-300">
-                                {sqlSchema}
-                            </pre>
+                        <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-4">
+                            <h4 className="text-indigo-800 font-bold text-xs uppercase mb-2">Step 2: Realtime</h4>
+                            <p className="text-indigo-700 text-xs leading-relaxed">
+                                The <code>ALTER PUBLICATION</code> command activates instant broadcasting across all connected PCs.
+                            </p>
                         </div>
                     </div>
 
-                    <div className="bg-amber-50 border border-amber-100 rounded-lg p-4 flex items-start">
-                        <AlertTriangle className="w-5 h-5 text-amber-600 mr-3 shrink-0" />
-                        <div className="text-xs text-amber-800 space-y-1">
-                            <p className="font-bold">Sync Instructions</p>
-                            <p>After running this SQL in Supabase, <strong>every device</strong> that logs in with the same account will see the exact same data instantly.</p>
-                        </div>
+                    <div className="pt-4 border-t border-slate-100">
+                        <h4 className="font-bold text-slate-800 text-sm mb-2">Manual Realtime Check:</h4>
+                        <ol className="text-xs text-slate-600 space-y-2 list-decimal list-inside">
+                            <li>Go to <strong>Database</strong> &gt; <strong>Publications</strong> in Supabase.</li>
+                            <li>Edit <strong>supabase_realtime</strong>.</li>
+                            <li>Ensure <strong>crm_entities</strong> is checked in the "Tables" list.</li>
+                        </ol>
                     </div>
                 </div>
             </div>

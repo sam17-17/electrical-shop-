@@ -105,6 +105,7 @@ const COLUMNS: Record<string, DataColumn[]> = {
   [EntityType.SYSTEM_USERS]: [
     { key: 'name', label: 'User Name', type: 'text', required: true },
     { key: 'email', label: 'Email Address', type: 'email', required: true },
+    { key: 'pin', label: 'Security PIN', type: 'password', required: true },
     { key: 'role', label: 'Assigned Role', type: 'select', options: ['Admin', 'Manager', 'Sales Agent', 'Accountant', 'Viewer'], required: true },
     { key: 'status', label: 'Account Status', type: 'status', options: ['Active', 'Suspended', 'Inactive'], required: true },
   ],
@@ -149,7 +150,6 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, logout, isDemoMode } = useAuth();
   
   const userRole = user?.user_metadata?.role || user?.role;
-  const isAdmin = userRole === 'Admin';
 
   const filteredNavItems = NAV_ITEMS.filter(item => {
     if (item.requiredRole && item.requiredRole !== userRole) {

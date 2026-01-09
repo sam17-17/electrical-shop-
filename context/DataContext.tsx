@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { EntityType, EntityState, GenericEntity } from '../types';
 import { getSupabase } from '../services/supabase';
 import { useAuth } from './AuthContext';
@@ -27,6 +27,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const { user, isAuthenticated, isDemoMode } = useAuth();
   const [data, setData] = useState<EntityState>(INITIAL_STATE);
   const [loading, setLoading] = useState(true);
+  const isInitialMount = useRef(true);
   
   const supabase = getSupabase();
 
@@ -36,7 +37,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        // Ensure all keys from EntityType exist
         const merged = { ...INITIAL_STATE, ...parsed };
         setData(merged);
       } catch (e) {
@@ -54,13 +54,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const fetchData = useCallback(async () => {
-    if (!isAuthenticated || !user) {
+    // We allow fetching even if not "authenticated" in the sense of a user object existing, 
+    // but we need a logic check for Demo vs Cloud.
+    if (!isAuthenticated && !localStorage.getItem('zill_mock_user')) {
       setData(INITIAL_STATE);
       setLoading(false);
       return;
     }
-
-    setLoading(true);
 
     // If in Demo Mode, always use Local Storage
     if (isDemoMode) {
@@ -69,17 +69,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
 
-    // Try Supabase if available
+    // Cloud Sync Mode
     if (supabase) {
       try {
+        // FETCHING ALL DATA for the organization (Shared Pool)
+        // We remove the .eq('user_id', user.id) to allow all members to see everything
         const { data: dbData, error } = await supabase
           .from('crm_entities')
-          .select('*')
-          .eq('user_id', user.id);
+          .select('*');
 
         if (error) {
-          // If table doesn't exist, fall back to local storage instead of erroring out
-          console.warn('Supabase fetch issue (likely missing table). Falling back to local storage:', error.message);
+          console.warn('Supabase fetch issue. Falling back to local storage:', error.message);
           loadLocalData();
         } else {
           const groupedData = { ...INITIAL_STATE };
@@ -99,11 +99,39 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       loadLocalData();
     }
     setLoading(false);
-  }, [isAuthenticated, user, supabase, isDemoMode, loadLocalData]);
+  }, [isAuthenticated, supabase, isDemoMode, loadLocalData]);
 
+  // Initial Data Fetch
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // SET UP REALTIME SUBSCRIPTION
+  useEffect(() => {
+    if (isDemoMode || !supabase || !isAuthenticated) return;
+
+    // Listen for all changes on crm_entities table
+    const channel = supabase
+      .channel('schema-db-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // Listen to INSERT, UPDATE, DELETE
+          schema: 'public',
+          table: 'crm_entities',
+        },
+        (payload) => {
+          // Instead of complex state patching, we refetch to ensure consistency
+          // and proper sorting/grouping
+          fetchData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [supabase, isDemoMode, isAuthenticated, fetchData]);
 
   const addEntity = async (type: EntityType, entity: Omit<GenericEntity, 'id'>) => {
     const id = (entity as any).id || Math.random().toString(36).substr(2, 9);
@@ -125,49 +153,42 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (error) {
       console.error('Error adding entity:', error);
-      // Fail over to local state for UX continuity
-      const newState = { ...data, [type]: [...data[type], newEntity] };
-      setData(newState);
       throw error;
     }
-    await fetchData();
+    // No need to manually refresh here, Realtime will catch it
   };
 
   const updateEntity = async (type: EntityType, id: string, entity: Partial<GenericEntity>) => {
     const currentItems = data[type];
-    const updatedItems = currentItems.map(item => item.id === id ? { ...item, ...entity } : item);
-    const newState = { ...data, [type]: updatedItems };
+    const target = currentItems.find(i => i.id === id);
+    if (!target) return;
+
+    const updatedEntity = { ...target, ...entity };
+    const content = { ...updatedEntity };
+    delete content.id;
 
     if (isDemoMode || !supabase) {
+      const updatedItems = currentItems.map(item => item.id === id ? updatedEntity : item);
+      const newState = { ...data, [type]: updatedItems };
       setData(newState);
       saveLocalData(newState);
       return;
     }
     
-    const target = updatedItems.find(i => i.id === id);
-    if (!target) return;
-
-    const content = { ...target };
-    delete content.id;
-
     const { error } = await supabase
       .from('crm_entities')
       .update({ content })
-      .eq('id', id)
-      .eq('user_id', user.id);
+      .eq('id', id);
 
     if (error) {
       console.error('Error updating entity:', error);
-      setData(newState); // Optimistic local update
       throw error;
     }
-    await fetchData();
   };
 
   const deleteEntity = async (type: EntityType, id: string) => {
-    const newState = { ...data, [type]: data[type].filter(i => i.id !== id) };
-
     if (isDemoMode || !supabase) {
+      const newState = { ...data, [type]: data[type].filter(i => i.id !== id) };
       setData(newState);
       saveLocalData(newState);
       return;
@@ -176,15 +197,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { error } = await supabase
       .from('crm_entities')
       .delete()
-      .eq('id', id)
-      .eq('user_id', user.id);
+      .eq('id', id);
 
     if (error) {
       console.error('Error deleting entity:', error);
-      setData(newState); // Optimistic local delete
       throw error;
     }
-    await fetchData();
   };
 
   const receivePayment = async (invoiceId: string, amount: number, bankAccountId: string, date: string, reference: string) => {
@@ -231,7 +249,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     try {
-      await supabase.from('crm_entities').delete().eq('user_id', user.id);
+      // Clear all existing data for the shared pool
+      await supabase.from('crm_entities').delete().neq('id', 'dummy'); 
       
       for (const [type, items] of Object.entries(newData)) {
         if (items.length > 0) {
@@ -246,11 +265,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
     } catch (e) {
-      console.error('Failed to import to cloud, saving locally', e);
-      setData(newData);
-      saveLocalData(newData);
+      console.error('Failed to import to cloud', e);
+      throw e;
     }
-    await fetchData();
   };
 
   return (

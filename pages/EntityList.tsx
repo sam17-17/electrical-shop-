@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { DataColumn, GenericEntity, LineItem, EntityType } from '../types';
-import { Edit2, Trash2, Plus, Filter, Download, FileDown, Eye, X, Wallet, Search, ArrowLeft } from 'lucide-react';
+// Added Loader2 to the imports from lucide-react
+import { Edit2, Trash2, Plus, Filter, Download, FileDown, Eye, X, Wallet, Search, ArrowLeft, CheckSquare, Square, ChevronDown, UserCheck, Shield, ToggleLeft, Loader2 } from 'lucide-react';
 // @ts-ignore
 import { jsPDF } from 'jspdf';
 // @ts-ignore
@@ -8,6 +9,7 @@ import autoTable from 'jspdf-autotable';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Modal } from '../components/Modal';
 import { PaymentModal } from '../components/PaymentModal';
+import { useData } from '../context/DataContext';
 
 interface EntityListProps {
   title: string;
@@ -26,12 +28,18 @@ export const EntityList: React.FC<EntityListProps> = ({
   onEdit, 
   onDelete 
 }) => {
+  const { updateEntity } = useData();
   const location = useLocation();
   const navigate = useNavigate();
   const currentPath = location.pathname.substring(1) as EntityType;
+  
   const [viewingItem, setViewingItem] = useState<GenericEntity | null>(null);
   const [paymentItem, setPaymentItem] = useState<GenericEntity | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // Multi-select state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isBulkActionLoading, setIsBulkActionLoading] = useState(false);
 
   const handleDownloadPDF = (item: GenericEntity) => {
     const doc = new jsPDF();
@@ -193,16 +201,116 @@ export const EntityList: React.FC<EntityListProps> = ({
     doc.save(`${docTitle.replace(/\s+/g, '_')}_${item.id}.pdf`);
   };
 
-  const filteredData = data.filter(item => {
-    if (!searchTerm) return true;
-    const term = searchTerm.toLowerCase();
-    return (item.name?.toString().toLowerCase().includes(term) || 
-            item.customer?.toString().toLowerCase().includes(term) || 
-            item.id?.toString().toLowerCase().includes(term));
-  });
+  const filteredData = useMemo(() => {
+    return data.filter(item => {
+        if (!searchTerm) return true;
+        const term = searchTerm.toLowerCase();
+        return (item.name?.toString().toLowerCase().includes(term) || 
+                item.customer?.toString().toLowerCase().includes(term) || 
+                item.id?.toString().toLowerCase().includes(term) ||
+                item.email?.toString().toLowerCase().includes(term));
+      });
+  }, [data, searchTerm]);
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filteredData.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredData.map(item => item.id)));
+    }
+  };
+
+  const toggleSelectOne = (id: string) => {
+    const next = new Set(selectedIds);
+    if (next.has(id)) {
+      next.delete(id);
+    } else {
+      next.add(id);
+    }
+    setSelectedIds(next);
+  };
+
+  const handleBulkUpdate = async (patch: Partial<GenericEntity>) => {
+    setIsBulkActionLoading(true);
+    try {
+      const promises = Array.from(selectedIds).map(id => updateEntity(currentPath, id, patch));
+      await Promise.all(promises);
+      setSelectedIds(new Set());
+    } catch (e) {
+      console.error('Bulk update failed', e);
+    } finally {
+      setIsBulkActionLoading(false);
+    }
+  };
+
+  // UI for Bulk Actions specifically for System Users
+  const renderBulkActions = () => {
+    if (currentPath !== EntityType.SYSTEM_USERS || selectedIds.size === 0) return null;
+
+    return (
+      <div className="flex flex-wrap items-center gap-3 bg-indigo-50 border border-indigo-100 p-3 rounded-xl animate-fade-in mb-4 shadow-sm">
+        <div className="flex items-center text-indigo-700 text-xs font-bold uppercase tracking-wider mr-4">
+          <Shield className="w-4 h-4 mr-2" />
+          {selectedIds.size} Users Selected
+        </div>
+
+        <div className="h-6 w-px bg-indigo-200 mx-2 hidden sm:block"></div>
+
+        {/* Change Role */}
+        <div className="relative group">
+          <button className="flex items-center px-3 py-1.5 bg-white border border-indigo-200 rounded-lg text-xs font-semibold text-indigo-700 hover:bg-indigo-600 hover:text-white transition-all">
+            Assign Role <ChevronDown className="w-3 h-3 ml-2" />
+          </button>
+          <div className="absolute top-full left-0 mt-1 w-40 bg-white border border-slate-200 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-all z-20 overflow-hidden">
+            {['Admin', 'Manager', 'Sales Agent', 'Accountant', 'Viewer'].map(role => (
+              <button 
+                key={role}
+                onClick={() => handleBulkUpdate({ role })}
+                className="w-full text-left px-4 py-2 text-xs hover:bg-indigo-50 text-slate-700 transition-colors border-b border-slate-50 last:border-0"
+              >
+                {role}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Change Status */}
+        <div className="flex gap-2">
+          <button 
+            onClick={() => handleBulkUpdate({ status: 'Active' })}
+            className="flex items-center px-3 py-1.5 bg-white border border-emerald-200 rounded-lg text-xs font-semibold text-emerald-700 hover:bg-emerald-600 hover:text-white transition-all"
+          >
+            <UserCheck className="w-3.5 h-3.5 mr-2" /> Activate
+          </button>
+          <button 
+            onClick={() => handleBulkUpdate({ status: 'Suspended' })}
+            className="flex items-center px-3 py-1.5 bg-white border border-red-200 rounded-lg text-xs font-semibold text-red-700 hover:bg-red-600 hover:text-white transition-all"
+          >
+            <ToggleLeft className="w-3.5 h-3.5 mr-2" /> Deactivate
+          </button>
+        </div>
+
+        <button 
+          onClick={() => setSelectedIds(new Set())}
+          className="ml-auto text-xs font-medium text-indigo-400 hover:text-indigo-600"
+        >
+          Deselect All
+        </button>
+      </div>
+    );
+  };
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 animate-fade-in relative">
+      {isBulkActionLoading && (
+        <div className="absolute inset-0 z-40 bg-white/50 backdrop-blur-[1px] flex items-center justify-center rounded-xl">
+           <div className="flex flex-col items-center">
+             <Loader2 className="w-10 h-10 text-indigo-600 animate-spin mb-2" />
+             <p className="text-indigo-900 font-bold">Applying changes...</p>
+           </div>
+        </div>
+      )}
+
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="flex items-center gap-4">
           <button onClick={() => navigate('/')} className="p-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-500"><ArrowLeft className="w-5 h-5" /></button>
@@ -219,25 +327,39 @@ export const EntityList: React.FC<EntityListProps> = ({
 
       <div className="relative">
         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Search className="h-5 w-5 text-slate-400" /></div>
-        <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="block w-full pl-10 pr-3 py-3 border border-slate-200 rounded-xl sm:text-sm" placeholder="Search..." />
+        <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="block w-full pl-10 pr-3 py-3 border border-slate-200 rounded-xl sm:text-sm" placeholder="Search records..." />
       </div>
+
+      {renderBulkActions()}
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">
+                <th className="px-6 py-4 w-10">
+                   <button onClick={toggleSelectAll} className="text-slate-400 hover:text-indigo-600 transition-colors">
+                      {selectedIds.size === filteredData.length && filteredData.length > 0 ? <CheckSquare className="w-5 h-5 text-indigo-600" /> : <Square className="w-5 h-5" />}
+                   </button>
+                </th>
                 {columns.map((col) => col.type !== 'items' && <th key={col.key} className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">{col.label}</th>)}
                 <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredData.length === 0 ? (
-                <tr><td colSpan={columns.length + 1} className="px-6 py-12 text-center text-slate-500">No records found.</td></tr>
+                <tr><td colSpan={columns.length + 2} className="px-6 py-12 text-center text-slate-500">No records found.</td></tr>
               ) : (
                 filteredData.map((item) => (
-                  <tr key={item.id} className="hover:bg-slate-50 transition-colors">
-                    {columns.map((col) => col.type !== 'items' && <td key={col.key} className="px-6 py-4 text-sm text-slate-700 whitespace-nowrap">{renderCell(item[col.key], col.type)}</td>)}
+                  <tr key={item.id} className={`hover:bg-slate-50 transition-colors ${selectedIds.has(item.id) ? 'bg-indigo-50/30' : ''}`}>
+                    <td className="px-6 py-4">
+                       <button onClick={() => toggleSelectOne(item.id)} className="text-slate-400 hover:text-indigo-600 transition-colors">
+                          {selectedIds.has(item.id) ? <CheckSquare className="w-5 h-5 text-indigo-600" /> : <Square className="w-5 h-5" />}
+                       </button>
+                    </td>
+                    {columns.map((col) => col.type !== 'items' && <td key={col.key} className="px-6 py-4 text-sm text-slate-700 whitespace-nowrap">
+                        {col.key === 'pin' ? '••••' : renderCell(item[col.key], col.type)}
+                    </td>)}
                     <td className="px-6 py-4 text-right whitespace-nowrap">
                       <div className="flex justify-end gap-2">
                         <button onClick={() => setViewingItem(item)} className="p-1.5 text-slate-500 hover:text-blue-600 rounded" title="View"><Eye className="w-4 h-4" /></button>
@@ -255,13 +377,16 @@ export const EntityList: React.FC<EntityListProps> = ({
         </div>
       </div>
 
-      <Modal isOpen={!!viewingItem} onClose={() => setViewingItem(null)} title="Details">
+      <Modal isOpen={!!viewingItem} onClose={() => setViewingItem(null)} title="Record Details">
         {viewingItem && <div className="space-y-4">
           <div className="flex justify-between items-center bg-slate-50 p-4 rounded-lg border">
-            <div><p className="text-xs text-slate-500 uppercase">Ref ID</p><p className="text-lg font-bold">{viewingItem.id}</p></div>
-            <button onClick={() => handleDownloadPDF(viewingItem)} className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm">Download PDF</button>
+            <div><p className="text-xs text-slate-500 uppercase">System ID</p><p className="text-lg font-bold">{viewingItem.id}</p></div>
+            <button onClick={() => handleDownloadPDF(viewingItem)} className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm">Download Record</button>
           </div>
-          <div className="grid grid-cols-2 gap-4">{columns.filter(c => c.type !== 'items' && c.key !== 'id').map(c => <div key={c.key} className="p-3 border rounded-lg"><p className="text-xs text-slate-400 uppercase">{c.label}</p><p className="text-sm font-medium">{renderCell(viewingItem[c.key], c.type)}</p></div>)}</div>
+          <div className="grid grid-cols-2 gap-4">{columns.filter(c => c.type !== 'items' && c.key !== 'id').map(c => <div key={c.key} className="p-3 border rounded-lg">
+              <p className="text-xs text-slate-400 uppercase">{c.label}</p>
+              <p className="text-sm font-medium">{c.key === 'pin' ? '••••' : renderCell(viewingItem[c.key], c.type)}</p>
+            </div>)}</div>
           {viewingItem.items && viewingItem.items.length > 0 && <div>
             <h4 className="text-sm font-semibold mb-2">Line Items</h4>
             <div className="border rounded-lg overflow-hidden">
@@ -284,7 +409,13 @@ const renderCell = (value: any, type: DataColumn['type']) => {
   if (type === 'currency') return new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' }).format(Number(value));
   if (type === 'date') return new Date(value).toLocaleDateString();
   if (type === 'status') {
-    const statusColors: Record<string, string> = { 'Paid': 'bg-green-100 text-green-700', 'Unpaid': 'bg-red-100 text-red-700', 'Sent': 'bg-blue-100 text-blue-700' };
+    const statusColors: Record<string, string> = { 
+        'Paid': 'bg-green-100 text-green-700', 
+        'Active': 'bg-emerald-100 text-emerald-700',
+        'Unpaid': 'bg-red-100 text-red-700', 
+        'Suspended': 'bg-red-100 text-red-700',
+        'Sent': 'bg-blue-100 text-blue-700' 
+    };
     return <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[value] || 'bg-slate-100'}`}>{value}</span>;
   }
   return value;
