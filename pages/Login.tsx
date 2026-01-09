@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Lock, User, ArrowRight, Loader2, AlertCircle, Mail, UserPlus } from 'lucide-react';
+import { Lock, User, ArrowRight, Loader2, AlertCircle, Mail, UserPlus, Eye, EyeOff } from 'lucide-react';
 
 export const Login: React.FC = () => {
   const { login, signUp } = useAuth();
   const [isSignUp, setIsSignUp] = useState(false);
-  const [username, setUsername] = useState('admin');
-  const [password, setPassword] = useState('1234');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -106,7 +107,7 @@ export const Login: React.FC = () => {
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   className="block w-full pl-10 pr-3 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm transition-all"
-                  placeholder={isSignUp ? "email@example.com" : "admin"}
+                  placeholder={isSignUp ? "email@example.com" : "Enter your username"}
                 />
               </div>
             </div>
@@ -118,13 +119,21 @@ export const Login: React.FC = () => {
                   <Lock className="h-4 w-4 text-slate-400" />
                 </div>
                 <input
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="block w-full pl-10 pr-3 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm transition-all"
+                  className="block w-full pl-10 pr-12 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm transition-all"
                   placeholder="••••"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 transition-colors"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
               </div>
             </div>
 
@@ -153,6 +162,9 @@ export const Login: React.FC = () => {
                   setIsSignUp(!isSignUp);
                   setError('');
                   setMessage('');
+                  setUsername('');
+                  setPassword('');
+                  setFullName('');
                 }}
                 className="text-sm font-medium text-indigo-600 hover:text-indigo-800"
               >

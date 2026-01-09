@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { EntityType, EntityState, GenericEntity } from '../types';
 import { getSupabase } from '../services/supabase';
 import { useAuth } from './AuthContext';
@@ -29,6 +30,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [data, setData] = useState<EntityState>(INITIAL_STATE);
   const [loading, setLoading] = useState(true);
   const [dbNeedsSetup, setDbNeedsSetup] = useState(false);
+  const autoSyncDone = useRef(false);
   
   const supabase = getSupabase();
 
@@ -39,12 +41,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const parsed = JSON.parse(saved);
         const merged = { ...INITIAL_STATE, ...parsed };
         setData(merged);
+        return merged;
       } catch (e) {
         console.error('Failed to parse local data', e);
         setData(INITIAL_STATE);
+        return INITIAL_STATE;
       }
     } else {
       setData(INITIAL_STATE);
+      return INITIAL_STATE;
     }
   }, []);
 
@@ -72,9 +77,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           .select('*');
 
         if (error) {
-          // Check for the specific "table not found" error
-          if (error.message.includes("Could not find the table") || error.code === 'PGRST116') {
-            console.warn('Database table missing. Falling back to local mode.');
+          if (error.message.includes("Could not find the table") || error.code === 'PGRST116' || error.message.includes("404")) {
+            console.warn('Database table missing or cache error. Using local storage.');
             setDbNeedsSetup(true);
             loadLocalData();
           } else {
@@ -84,13 +88,27 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } else {
           setDbNeedsSetup(false);
           const groupedData = { ...INITIAL_STATE };
-          dbData?.forEach((row) => {
+          // Cast dbData to any[] to avoid "unknown" type issues when processing rows
+          (dbData as any[])?.forEach((row) => {
             const type = row.type as EntityType;
             if (groupedData[type]) {
               groupedData[type].push({ ...row.content, id: row.id });
             }
           });
+          
           setData(groupedData);
+
+          // Automatic Sync Logic: If cloud is empty but local has data, sync it once
+          // FIX: Explicitly cast dbData to any[] to ensure the .length property is accessible on narrowed array types.
+          if (Array.isArray(dbData) && (dbData as any[]).length === 0 && !autoSyncDone.current) {
+            const localData = loadLocalData();
+            const hasData = Object.values(localData).some(arr => arr.length > 0);
+            if (hasData) {
+              console.log('Detected local data with empty cloud. Triggering automatic sync...');
+              importData(localData).catch(err => console.error("Auto-sync failed", err));
+            }
+          }
+          autoSyncDone.current = true;
         }
       } catch (e) {
         console.error('Unexpected error fetching data:', e);
@@ -133,12 +151,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const id = (entity as any).id || Math.random().toString(36).substr(2, 9);
     const newEntity = { ...entity, id };
 
-    if (isDemoMode || !supabase || dbNeedsSetup) {
-      const newState = { ...data, [type]: [...data[type], newEntity] };
-      setData(newState);
-      saveLocalData(newState);
-      return;
-    }
+    // Optimistic UI Update
+    const oldState = data;
+    const newState = { ...data, [type]: [...data[type], newEntity] };
+    setData(newState);
+    saveLocalData(newState);
+
+    if (isDemoMode || !supabase || dbNeedsSetup) return;
 
     if (!user?.id) throw new Error("User session expired. Please log in again.");
 
@@ -152,15 +171,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (error) {
       if (error.message.includes("Could not find the table")) {
         setDbNeedsSetup(true);
-        // Fallback to local save immediately
-        const newState = { ...data, [type]: [...data[type], newEntity] };
-        setData(newState);
-        saveLocalData(newState);
-        return;
+      } else {
+        setData(oldState); // Rollback on non-setup error
+        throw new Error(error.message);
       }
-      const msg = error.message || 'Unknown database error';
-      console.error('Error adding entity:', msg);
-      throw new Error(msg);
     }
   };
 
@@ -170,36 +184,37 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!target) return;
 
     const updatedEntity = { ...target, ...entity };
+    
+    // Optimistic UI Update
+    const oldState = data;
+    const updatedItems = currentItems.map(item => item.id === id ? updatedEntity : item);
+    const newState = { ...data, [type]: updatedItems };
+    setData(newState);
+    saveLocalData(newState);
+
+    if (isDemoMode || !supabase || dbNeedsSetup) return;
+    
     const content = { ...updatedEntity };
     delete content.id;
 
-    if (isDemoMode || !supabase || dbNeedsSetup) {
-      const updatedItems = currentItems.map(item => item.id === id ? updatedEntity : item);
-      const newState = { ...data, [type]: updatedItems };
-      setData(newState);
-      saveLocalData(newState);
-      return;
-    }
-    
     const { error } = await supabase
       .from('crm_entities')
       .update({ content })
       .eq('id', id);
 
     if (error) {
-      const msg = error.message || 'Unknown database error';
-      console.error('Error updating entity:', msg);
-      throw new Error(msg);
+      setData(oldState); // Rollback
+      throw new Error(error.message);
     }
   };
 
   const deleteEntity = async (type: EntityType, id: string) => {
-    if (isDemoMode || !supabase || dbNeedsSetup) {
-      const newState = { ...data, [type]: data[type].filter(i => i.id !== id) };
-      setData(newState);
-      saveLocalData(newState);
-      return;
-    }
+    const oldState = data;
+    const newState = { ...data, [type]: data[type].filter(i => i.id !== id) };
+    setData(newState);
+    saveLocalData(newState);
+
+    if (isDemoMode || !supabase || dbNeedsSetup) return;
 
     const { error } = await supabase
       .from('crm_entities')
@@ -207,9 +222,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .eq('id', id);
 
     if (error) {
-      const msg = error.message || 'Unknown database error';
-      console.error('Error deleting entity:', msg);
-      throw new Error(msg);
+      setData(oldState); // Rollback
+      throw new Error(error.message);
     }
   };
 
@@ -248,14 +262,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const importData = async (newData: EntityState) => {
-    if (isDemoMode || !supabase || dbNeedsSetup) {
-      setData(newData);
-      saveLocalData(newData);
-      return;
-    }
+    setData(newData);
+    saveLocalData(newData);
+
+    if (isDemoMode || !supabase || dbNeedsSetup) return;
 
     try {
-      await supabase.from('crm_entities').delete().neq('id', 'dummy'); 
+      // Clear cloud and push new
+      await supabase.from('crm_entities').delete().neq('id', 'dummy_to_allow_mass_delete'); 
       
       for (const [type, items] of Object.entries(newData)) {
         if (items.length > 0) {
@@ -271,8 +285,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
     } catch (e: any) {
-      console.error('Failed to import to cloud:', e.message);
-      throw e;
+      console.error('Cloud import failed:', e.message);
+      // We don't rollback local state here because the user likely wants their data locally regardless
     }
   };
 
