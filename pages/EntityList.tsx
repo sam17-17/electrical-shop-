@@ -1,7 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { DataColumn, GenericEntity, LineItem, EntityType } from '../types';
-// Added Loader2 to the imports from lucide-react
-import { Edit2, Trash2, Plus, Filter, Download, FileDown, Eye, X, Wallet, Search, ArrowLeft, CheckSquare, Square, ChevronDown, UserCheck, Shield, ToggleLeft, Loader2 } from 'lucide-react';
+import { 
+  Edit2, Trash2, Plus, Filter, Download, FileDown, Eye, X, Wallet, Search, 
+  ArrowLeft, CheckSquare, Square, ChevronDown, UserCheck, Shield, ToggleLeft, 
+  Loader2, MoreHorizontal
+} from 'lucide-react';
 // @ts-ignore
 import { jsPDF } from 'jspdf';
 // @ts-ignore
@@ -45,11 +48,6 @@ export const EntityList: React.FC<EntityListProps> = ({
     const doc = new jsPDF();
     const currencyFormatter = new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' });
 
-    // ==========================================
-    // COMPANY HEADER SECTION (GEOSAM BRANDING)
-    // ==========================================
-    
-    // Draw Simulated Logo (Geosam Technology)
     doc.setTextColor(15, 23, 42); 
     doc.setFontSize(24);
     doc.setFont('helvetica', 'bold');
@@ -77,9 +75,6 @@ export const EntityList: React.FC<EntityListProps> = ({
     doc.setLineWidth(0.5);
     doc.line(14, 45, 196, 45);
 
-    // ==========================================
-    // DOCUMENT METADATA
-    // ==========================================
     const isTransactionDoc = [
         EntityType.SALES_INVOICES, 
         EntityType.SALES_QUOTES, 
@@ -213,7 +208,7 @@ export const EntityList: React.FC<EntityListProps> = ({
   }, [data, searchTerm]);
 
   const toggleSelectAll = () => {
-    if (selectedIds.size === filteredData.length) {
+    if (selectedIds.size === filteredData.length && filteredData.length > 0) {
       setSelectedIds(new Set());
     } else {
       setSelectedIds(new Set(filteredData.map(item => item.id)));
@@ -236,14 +231,13 @@ export const EntityList: React.FC<EntityListProps> = ({
       const promises = Array.from(selectedIds).map(id => updateEntity(currentPath, id, patch));
       await Promise.all(promises);
       setSelectedIds(new Set());
-    } catch (e) {
-      console.error('Bulk update failed', e);
+    } catch (e: any) {
+      alert(`Bulk update failed: ${e.message || 'Unknown error'}`);
     } finally {
       setIsBulkActionLoading(false);
     }
   };
 
-  // UI for Bulk Actions specifically for System Users
   const renderBulkActions = () => {
     if (currentPath !== EntityType.SYSTEM_USERS || selectedIds.size === 0) return null;
 
@@ -256,9 +250,8 @@ export const EntityList: React.FC<EntityListProps> = ({
 
         <div className="h-6 w-px bg-indigo-200 mx-2 hidden sm:block"></div>
 
-        {/* Change Role */}
         <div className="relative group">
-          <button className="flex items-center px-3 py-1.5 bg-white border border-indigo-200 rounded-lg text-xs font-semibold text-indigo-700 hover:bg-indigo-600 hover:text-white transition-all">
+          <button className="flex items-center px-3 py-1.5 bg-white border border-indigo-200 rounded-lg text-xs font-semibold text-indigo-700 hover:bg-indigo-600 hover:text-white transition-all shadow-sm">
             Assign Role <ChevronDown className="w-3 h-3 ml-2" />
           </button>
           <div className="absolute top-full left-0 mt-1 w-40 bg-white border border-slate-200 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-all z-20 overflow-hidden">
@@ -274,17 +267,16 @@ export const EntityList: React.FC<EntityListProps> = ({
           </div>
         </div>
 
-        {/* Change Status */}
         <div className="flex gap-2">
           <button 
             onClick={() => handleBulkUpdate({ status: 'Active' })}
-            className="flex items-center px-3 py-1.5 bg-white border border-emerald-200 rounded-lg text-xs font-semibold text-emerald-700 hover:bg-emerald-600 hover:text-white transition-all"
+            className="flex items-center px-3 py-1.5 bg-white border border-emerald-200 rounded-lg text-xs font-semibold text-emerald-700 hover:bg-emerald-600 hover:text-white transition-all shadow-sm"
           >
             <UserCheck className="w-3.5 h-3.5 mr-2" /> Activate
           </button>
           <button 
             onClick={() => handleBulkUpdate({ status: 'Suspended' })}
-            className="flex items-center px-3 py-1.5 bg-white border border-red-200 rounded-lg text-xs font-semibold text-red-700 hover:bg-red-600 hover:text-white transition-all"
+            className="flex items-center px-3 py-1.5 bg-white border border-red-200 rounded-lg text-xs font-semibold text-red-700 hover:bg-red-600 hover:text-white transition-all shadow-sm"
           >
             <ToggleLeft className="w-3.5 h-3.5 mr-2" /> Deactivate
           </button>
@@ -300,34 +292,53 @@ export const EntityList: React.FC<EntityListProps> = ({
     );
   };
 
+  const renderCell = (value: any, type: DataColumn['type'], colKey: string) => {
+    if (value === null || value === undefined) return '-';
+    if (colKey === 'pin') return '••••';
+    if (type === 'currency') return new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' }).format(Number(value));
+    if (type === 'date') return new Date(value).toLocaleDateString();
+    if (type === 'status') {
+      const statusColors: Record<string, string> = { 
+          'Paid': 'bg-green-100 text-green-700', 
+          'Active': 'bg-emerald-100 text-emerald-700',
+          'Unpaid': 'bg-red-100 text-red-700', 
+          'Suspended': 'bg-red-100 text-red-700',
+          'Inactive': 'bg-slate-100 text-slate-700',
+          'Sent': 'bg-blue-100 text-blue-700' 
+      };
+      return <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[value] || 'bg-slate-100'}`}>{value}</span>;
+    }
+    return value;
+  };
+
   return (
     <div className="space-y-6 animate-fade-in relative">
       {isBulkActionLoading && (
-        <div className="absolute inset-0 z-40 bg-white/50 backdrop-blur-[1px] flex items-center justify-center rounded-xl">
-           <div className="flex flex-col items-center">
-             <Loader2 className="w-10 h-10 text-indigo-600 animate-spin mb-2" />
-             <p className="text-indigo-900 font-bold">Applying changes...</p>
+        <div className="fixed inset-0 z-50 bg-white/50 backdrop-blur-[2px] flex items-center justify-center">
+           <div className="bg-white p-6 rounded-2xl shadow-2xl flex flex-col items-center border border-indigo-100">
+             <Loader2 className="w-10 h-10 text-indigo-600 animate-spin mb-3" />
+             <p className="text-indigo-900 font-bold">Applying shared updates...</p>
            </div>
         </div>
       )}
 
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="flex items-center gap-4">
-          <button onClick={() => navigate('/')} className="p-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-500"><ArrowLeft className="w-5 h-5" /></button>
+          <button onClick={() => navigate('/')} className="p-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-500 transition-colors"><ArrowLeft className="w-5 h-5" /></button>
           <div>
             <h1 className="text-2xl font-bold text-slate-900">{title}</h1>
-            <p className="text-slate-500">Manage your {title.toLowerCase()} data</p>
+            <p className="text-slate-500 text-sm">Manage your {title.toLowerCase()} records</p>
           </div>
         </div>
         <div className="flex gap-3">
-          <button className="px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg text-sm font-medium flex items-center"><Filter className="w-4 h-4 mr-2" />Filter</button>
-          <button onClick={onAdd} className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium flex items-center shadow-sm"><Plus className="w-4 h-4 mr-2" />New Entry</button>
+          <button className="px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg text-sm font-medium flex items-center hover:bg-slate-50 transition-colors"><Filter className="w-4 h-4 mr-2" />Filter</button>
+          <button onClick={onAdd} className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium flex items-center shadow-md hover:bg-indigo-700 transition-all"><Plus className="w-4 h-4 mr-2" />New Entry</button>
         </div>
       </div>
 
       <div className="relative">
         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Search className="h-5 w-5 text-slate-400" /></div>
-        <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="block w-full pl-10 pr-3 py-3 border border-slate-200 rounded-xl sm:text-sm" placeholder="Search records..." />
+        <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="block w-full pl-10 pr-3 py-3 bg-white border border-slate-200 rounded-xl sm:text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all shadow-sm" placeholder={`Search in ${title.toLowerCase()}...`} />
       </div>
 
       {renderBulkActions()}
@@ -351,22 +362,22 @@ export const EntityList: React.FC<EntityListProps> = ({
                 <tr><td colSpan={columns.length + 2} className="px-6 py-12 text-center text-slate-500">No records found.</td></tr>
               ) : (
                 filteredData.map((item) => (
-                  <tr key={item.id} className={`hover:bg-slate-50 transition-colors ${selectedIds.has(item.id) ? 'bg-indigo-50/30' : ''}`}>
+                  <tr key={item.id} className={`hover:bg-slate-50/80 transition-colors ${selectedIds.has(item.id) ? 'bg-indigo-50/40' : ''}`}>
                     <td className="px-6 py-4">
                        <button onClick={() => toggleSelectOne(item.id)} className="text-slate-400 hover:text-indigo-600 transition-colors">
                           {selectedIds.has(item.id) ? <CheckSquare className="w-5 h-5 text-indigo-600" /> : <Square className="w-5 h-5" />}
                        </button>
                     </td>
                     {columns.map((col) => col.type !== 'items' && <td key={col.key} className="px-6 py-4 text-sm text-slate-700 whitespace-nowrap">
-                        {col.key === 'pin' ? '••••' : renderCell(item[col.key], col.type)}
+                        {renderCell(item[col.key], col.type, col.key)}
                     </td>)}
                     <td className="px-6 py-4 text-right whitespace-nowrap">
                       <div className="flex justify-end gap-2">
-                        <button onClick={() => setViewingItem(item)} className="p-1.5 text-slate-500 hover:text-blue-600 rounded" title="View"><Eye className="w-4 h-4" /></button>
-                        {currentPath === EntityType.SALES_INVOICES && item.status !== 'Paid' && <button onClick={() => setPaymentItem(item)} className="p-1.5 text-slate-500 hover:text-emerald-600 rounded" title="Payment"><Wallet className="w-4 h-4" /></button>}
-                        <button onClick={() => handleDownloadPDF(item)} className="p-1.5 text-slate-500 hover:text-emerald-600 rounded" title="PDF"><FileDown className="w-4 h-4" /></button>
-                        <button onClick={() => onEdit(item.id)} className="p-1.5 text-slate-500 hover:text-indigo-600 rounded"><Edit2 className="w-4 h-4" /></button>
-                        <button onClick={() => onDelete(item.id)} className="p-1.5 text-slate-500 hover:text-red-600 rounded"><Trash2 className="w-4 h-4" /></button>
+                        <button onClick={() => setViewingItem(item)} className="p-1.5 text-slate-500 hover:text-blue-600 rounded transition-colors" title="View"><Eye className="w-4 h-4" /></button>
+                        {currentPath === EntityType.SALES_INVOICES && item.status !== 'Paid' && <button onClick={() => setPaymentItem(item)} className="p-1.5 text-slate-500 hover:text-emerald-600 rounded transition-colors" title="Payment"><Wallet className="w-4 h-4" /></button>}
+                        <button onClick={() => handleDownloadPDF(item)} className="p-1.5 text-slate-500 hover:text-indigo-600 rounded transition-colors" title="Download PDF"><FileDown className="w-4 h-4" /></button>
+                        <button onClick={() => onEdit(item.id)} className="p-1.5 text-slate-500 hover:text-indigo-600 rounded transition-colors"><Edit2 className="w-4 h-4" /></button>
+                        <button onClick={() => onDelete(item.id)} className="p-1.5 text-slate-500 hover:text-red-600 rounded transition-colors"><Trash2 className="w-4 h-4" /></button>
                       </div>
                     </td>
                   </tr>
@@ -379,20 +390,27 @@ export const EntityList: React.FC<EntityListProps> = ({
 
       <Modal isOpen={!!viewingItem} onClose={() => setViewingItem(null)} title="Record Details">
         {viewingItem && <div className="space-y-4">
-          <div className="flex justify-between items-center bg-slate-50 p-4 rounded-lg border">
-            <div><p className="text-xs text-slate-500 uppercase">System ID</p><p className="text-lg font-bold">{viewingItem.id}</p></div>
-            <button onClick={() => handleDownloadPDF(viewingItem)} className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm">Download Record</button>
+          <div className="flex justify-between items-center bg-slate-50 p-4 rounded-lg border border-slate-200">
+            <div><p className="text-xs text-slate-500 uppercase tracking-wider mb-1">System Reference</p><p className="text-lg font-bold text-slate-800">{viewingItem.id}</p></div>
+            <button onClick={() => handleDownloadPDF(viewingItem)} className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold shadow-sm hover:bg-indigo-700 transition-colors">Generate PDF</button>
           </div>
-          <div className="grid grid-cols-2 gap-4">{columns.filter(c => c.type !== 'items' && c.key !== 'id').map(c => <div key={c.key} className="p-3 border rounded-lg">
-              <p className="text-xs text-slate-400 uppercase">{c.label}</p>
-              <p className="text-sm font-medium">{c.key === 'pin' ? '••••' : renderCell(viewingItem[c.key], c.type)}</p>
-            </div>)}</div>
+          <div className="grid grid-cols-2 gap-4">
+            {columns.filter(c => c.type !== 'items' && c.key !== 'id').map(c => (
+              <div key={c.key} className="p-3 bg-white border border-slate-100 rounded-lg shadow-sm">
+                <p className="text-[10px] text-slate-400 uppercase font-bold tracking-widest mb-1">{c.label}</p>
+                <p className="text-sm font-medium text-slate-700">
+                  {/* For viewing PINs, we show them as requested for admin view */}
+                  {renderCell(viewingItem[c.key], c.type, c.key === 'pin' ? 'visible-pin' : c.key)}
+                </p>
+              </div>
+            ))}
+          </div>
           {viewingItem.items && viewingItem.items.length > 0 && <div>
-            <h4 className="text-sm font-semibold mb-2">Line Items</h4>
-            <div className="border rounded-lg overflow-hidden">
+            <h4 className="text-sm font-bold text-slate-800 mb-2 px-1">Line Items</h4>
+            <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
               <table className="w-full text-sm text-left">
-                <thead className="bg-slate-50"><tr><th className="px-3 py-2">Item</th><th className="px-3 py-2 text-center">Qty</th><th className="px-3 py-2 text-right">Price</th><th className="px-3 py-2 text-right">Total</th></tr></thead>
-                <tbody className="divide-y">{viewingItem.items.map((i: any, idx: number) => <tr key={idx}><td className="px-3 py-2">{i.description}</td><td className="px-3 py-2 text-center">{i.quantity}</td><td className="px-3 py-2 text-right">{renderCell(i.unitPrice, 'currency')}</td><td className="px-3 py-2 text-right">{renderCell(i.total, 'currency')}</td></tr>)}</tbody>
+                <thead className="bg-slate-50"><tr><th className="px-3 py-2 text-slate-500">Item Description</th><th className="px-3 py-2 text-center text-slate-500">Qty</th><th className="px-3 py-2 text-right text-slate-500">Price</th><th className="px-3 py-2 text-right text-slate-500">Total</th></tr></thead>
+                <tbody className="divide-y divide-slate-100">{viewingItem.items.map((i: any, idx: number) => <tr key={idx} className="bg-white"><td className="px-3 py-2 text-slate-700">{i.description}</td><td className="px-3 py-2 text-center text-slate-600">{i.quantity}</td><td className="px-3 py-2 text-right text-slate-600">{renderCell(i.unitPrice, 'currency', 'price')}</td><td className="px-3 py-2 text-right font-semibold text-slate-800">{renderCell(i.total, 'currency', 'total')}</td></tr>)}</tbody>
               </table>
             </div>
           </div>}
@@ -402,21 +420,4 @@ export const EntityList: React.FC<EntityListProps> = ({
       <PaymentModal isOpen={!!paymentItem} onClose={() => setPaymentItem(null)} invoice={paymentItem} />
     </div>
   );
-};
-
-const renderCell = (value: any, type: DataColumn['type']) => {
-  if (value === null || value === undefined) return '-';
-  if (type === 'currency') return new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' }).format(Number(value));
-  if (type === 'date') return new Date(value).toLocaleDateString();
-  if (type === 'status') {
-    const statusColors: Record<string, string> = { 
-        'Paid': 'bg-green-100 text-green-700', 
-        'Active': 'bg-emerald-100 text-emerald-700',
-        'Unpaid': 'bg-red-100 text-red-700', 
-        'Suspended': 'bg-red-100 text-red-700',
-        'Sent': 'bg-blue-100 text-blue-700' 
-    };
-    return <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[value] || 'bg-slate-100'}`}>{value}</span>;
-  }
-  return value;
 };

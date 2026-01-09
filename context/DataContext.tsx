@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { EntityType, EntityState, GenericEntity } from '../types';
 import { getSupabase } from '../services/supabase';
 import { useAuth } from './AuthContext';
@@ -6,6 +6,7 @@ import { useAuth } from './AuthContext';
 interface DataContextType {
   data: EntityState;
   loading: boolean;
+  dbNeedsSetup: boolean;
   addEntity: (type: EntityType, entity: Omit<GenericEntity, 'id'>) => Promise<void>;
   updateEntity: (type: EntityType, id: string, entity: Partial<GenericEntity>) => Promise<void>;
   deleteEntity: (type: EntityType, id: string) => Promise<void>;
@@ -27,11 +28,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const { user, isAuthenticated, isDemoMode } = useAuth();
   const [data, setData] = useState<EntityState>(INITIAL_STATE);
   const [loading, setLoading] = useState(true);
-  const isInitialMount = useRef(true);
+  const [dbNeedsSetup, setDbNeedsSetup] = useState(false);
   
   const supabase = getSupabase();
 
-  // Helper to load from local storage
   const loadLocalData = useCallback(() => {
     const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (saved) {
@@ -48,40 +48,41 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  // Helper to save to local storage
   const saveLocalData = (newState: EntityState) => {
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(newState));
   };
 
   const fetchData = useCallback(async () => {
-    // We allow fetching even if not "authenticated" in the sense of a user object existing, 
-    // but we need a logic check for Demo vs Cloud.
     if (!isAuthenticated && !localStorage.getItem('zill_mock_user')) {
       setData(INITIAL_STATE);
       setLoading(false);
       return;
     }
 
-    // If in Demo Mode, always use Local Storage
     if (isDemoMode) {
       loadLocalData();
       setLoading(false);
       return;
     }
 
-    // Cloud Sync Mode
     if (supabase) {
       try {
-        // FETCHING ALL DATA for the organization (Shared Pool)
-        // We remove the .eq('user_id', user.id) to allow all members to see everything
         const { data: dbData, error } = await supabase
           .from('crm_entities')
           .select('*');
 
         if (error) {
-          console.warn('Supabase fetch issue. Falling back to local storage:', error.message);
-          loadLocalData();
+          // Check for the specific "table not found" error
+          if (error.message.includes("Could not find the table") || error.code === 'PGRST116') {
+            console.warn('Database table missing. Falling back to local mode.');
+            setDbNeedsSetup(true);
+            loadLocalData();
+          } else {
+            console.warn('Supabase fetch issue:', error.message);
+            loadLocalData();
+          }
         } else {
+          setDbNeedsSetup(false);
           const groupedData = { ...INITIAL_STATE };
           dbData?.forEach((row) => {
             const type = row.type as EntityType;
@@ -101,28 +102,23 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(false);
   }, [isAuthenticated, supabase, isDemoMode, loadLocalData]);
 
-  // Initial Data Fetch
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  // SET UP REALTIME SUBSCRIPTION
   useEffect(() => {
-    if (isDemoMode || !supabase || !isAuthenticated) return;
+    if (isDemoMode || !supabase || !isAuthenticated || dbNeedsSetup) return;
 
-    // Listen for all changes on crm_entities table
     const channel = supabase
       .channel('schema-db-changes')
       .on(
         'postgres_changes',
         {
-          event: '*', // Listen to INSERT, UPDATE, DELETE
+          event: '*',
           schema: 'public',
           table: 'crm_entities',
         },
-        (payload) => {
-          // Instead of complex state patching, we refetch to ensure consistency
-          // and proper sorting/grouping
+        () => {
           fetchData();
         }
       )
@@ -131,18 +127,20 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [supabase, isDemoMode, isAuthenticated, fetchData]);
+  }, [supabase, isDemoMode, isAuthenticated, fetchData, dbNeedsSetup]);
 
   const addEntity = async (type: EntityType, entity: Omit<GenericEntity, 'id'>) => {
     const id = (entity as any).id || Math.random().toString(36).substr(2, 9);
     const newEntity = { ...entity, id };
 
-    if (isDemoMode || !supabase) {
+    if (isDemoMode || !supabase || dbNeedsSetup) {
       const newState = { ...data, [type]: [...data[type], newEntity] };
       setData(newState);
       saveLocalData(newState);
       return;
     }
+
+    if (!user?.id) throw new Error("User session expired. Please log in again.");
 
     const content = { ...entity };
     delete (content as any).id;
@@ -152,10 +150,18 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .insert([{ id, type, content, user_id: user.id }]);
 
     if (error) {
-      console.error('Error adding entity:', error);
-      throw error;
+      if (error.message.includes("Could not find the table")) {
+        setDbNeedsSetup(true);
+        // Fallback to local save immediately
+        const newState = { ...data, [type]: [...data[type], newEntity] };
+        setData(newState);
+        saveLocalData(newState);
+        return;
+      }
+      const msg = error.message || 'Unknown database error';
+      console.error('Error adding entity:', msg);
+      throw new Error(msg);
     }
-    // No need to manually refresh here, Realtime will catch it
   };
 
   const updateEntity = async (type: EntityType, id: string, entity: Partial<GenericEntity>) => {
@@ -167,7 +173,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const content = { ...updatedEntity };
     delete content.id;
 
-    if (isDemoMode || !supabase) {
+    if (isDemoMode || !supabase || dbNeedsSetup) {
       const updatedItems = currentItems.map(item => item.id === id ? updatedEntity : item);
       const newState = { ...data, [type]: updatedItems };
       setData(newState);
@@ -181,13 +187,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .eq('id', id);
 
     if (error) {
-      console.error('Error updating entity:', error);
-      throw error;
+      const msg = error.message || 'Unknown database error';
+      console.error('Error updating entity:', msg);
+      throw new Error(msg);
     }
   };
 
   const deleteEntity = async (type: EntityType, id: string) => {
-    if (isDemoMode || !supabase) {
+    if (isDemoMode || !supabase || dbNeedsSetup) {
       const newState = { ...data, [type]: data[type].filter(i => i.id !== id) };
       setData(newState);
       saveLocalData(newState);
@@ -200,8 +207,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .eq('id', id);
 
     if (error) {
-      console.error('Error deleting entity:', error);
-      throw error;
+      const msg = error.message || 'Unknown database error';
+      console.error('Error deleting entity:', msg);
+      throw new Error(msg);
     }
   };
 
@@ -218,9 +226,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       status: newStatus
     });
 
-    const receiptId = `RCP-${Date.now()}`;
     await addEntity(EntityType.SALES_ORDERS, {
-      id: receiptId,
       customer: invoice.customer,
       phone: invoice.phone,
       date,
@@ -242,14 +248,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const importData = async (newData: EntityState) => {
-    if (isDemoMode || !supabase) {
+    if (isDemoMode || !supabase || dbNeedsSetup) {
       setData(newData);
       saveLocalData(newData);
       return;
     }
 
     try {
-      // Clear all existing data for the shared pool
       await supabase.from('crm_entities').delete().neq('id', 'dummy'); 
       
       for (const [type, items] of Object.entries(newData)) {
@@ -258,20 +263,21 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             id: item.id || Math.random().toString(36).substr(2, 9),
             type,
             content: { ...item },
-            user_id: user.id
+            user_id: user?.id
           }));
           rows.forEach(r => delete r.content.id);
-          await supabase.from('crm_entities').insert(rows);
+          const { error } = await supabase.from('crm_entities').insert(rows);
+          if (error) throw error;
         }
       }
-    } catch (e) {
-      console.error('Failed to import to cloud', e);
+    } catch (e: any) {
+      console.error('Failed to import to cloud:', e.message);
       throw e;
     }
   };
 
   return (
-    <DataContext.Provider value={{ data, loading, addEntity, updateEntity, deleteEntity, getEntity, importData, receivePayment }}>
+    <DataContext.Provider value={{ data, loading, dbNeedsSetup, addEntity, updateEntity, deleteEntity, getEntity, importData, receivePayment }}>
       {children}
     </DataContext.Provider>
   );

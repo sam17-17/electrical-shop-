@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { HashRouter as Router, Routes, Route, NavLink, useLocation, Navigate } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, NavLink, useLocation, Navigate, Link } from 'react-router-dom';
 import { 
   LayoutDashboard, Wallet, Users, FileText, ShoppingCart, Truck, 
   Briefcase, Receipt, Layers, Folder, UserCheck, BookOpen, 
   PieChart, Settings as SettingsIcon, Menu, X, ChevronRight,
-  ClipboardList, StickyNote, LogOut, Loader2, Database, Cloud, CloudOff, ShieldCheck
+  ClipboardList, StickyNote, LogOut, Loader2, Database, Cloud, CloudOff, ShieldCheck,
+  AlertTriangle, ArrowRight
 } from 'lucide-react';
 import { EntityType, NavItem, DataColumn } from './types';
 import { Summary } from './pages/Summary';
@@ -146,7 +147,7 @@ const NAV_ITEMS: NavItem[] = [
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const location = useLocation();
-  const { data } = useData();
+  const { data, dbNeedsSetup } = useData();
   const { user, logout, isDemoMode } = useAuth();
   
   const userRole = user?.user_metadata?.role || user?.role;
@@ -229,10 +230,10 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
            {sidebarOpen && (
              <div className={`px-4 py-2 text-[10px] flex items-center justify-between ${isDemoMode ? 'text-amber-400 bg-amber-500/5' : 'text-emerald-400 bg-emerald-500/5'}`}>
                 <div className="flex items-center">
-                  {isDemoMode ? <CloudOff className="w-3 h-3 mr-1.5" /> : <Cloud className="w-3 h-3 mr-1.5" />}
-                  <span>{isDemoMode ? 'STORAGE: LOCAL' : 'STORAGE: CLOUD SYNC'}</span>
+                  {(isDemoMode || dbNeedsSetup) ? <CloudOff className="w-3 h-3 mr-1.5" /> : <Cloud className="w-3 h-3 mr-1.5" />}
+                  <span>{(isDemoMode || dbNeedsSetup) ? 'STORAGE: LOCAL' : 'STORAGE: CLOUD SYNC'}</span>
                 </div>
-                {!isDemoMode && <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>}
+                {!isDemoMode && !dbNeedsSetup && <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>}
              </div>
            )}
 
@@ -246,7 +247,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                 {sidebarOpen && (
                   <div className="ml-3 text-left overflow-hidden">
                     <p className="text-sm font-medium text-slate-300 truncate">{user?.username || user?.email?.split('@')[0] || 'User'}</p>
-                    <p className="text-xs text-slate-500 truncate">{isDemoMode ? 'Local Admin' : 'Cloud Session'}</p>
+                    <p className="text-xs text-slate-500 truncate">{(isDemoMode || dbNeedsSetup) ? 'Local Admin' : 'Cloud Session'}</p>
                   </div>
                 )}
               </div>
@@ -288,8 +289,24 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-6 scroll-smooth">
-          {children}
+        <main className="flex-1 overflow-y-auto p-0 scroll-smooth flex flex-col">
+          {dbNeedsSetup && (
+            <div className="bg-amber-50 border-b border-amber-200 px-6 py-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-fade-in shrink-0">
+               <div className="flex items-center text-amber-800 text-sm font-medium">
+                  <AlertTriangle className="w-5 h-5 mr-3 text-amber-500 shrink-0" />
+                  <div>
+                    <p className="font-bold">Database Table Missing</p>
+                    <p className="opacity-80">Cloud features are disabled. Please run the SQL setup script to enable team sync.</p>
+                  </div>
+               </div>
+               <Link to="/settings" className="flex items-center px-4 py-1.5 bg-amber-600 text-white rounded-lg text-xs font-bold hover:bg-amber-700 transition-colors shadow-sm whitespace-nowrap">
+                  View SQL Script <ArrowRight className="w-3 h-3 ml-2" />
+               </Link>
+            </div>
+          )}
+          <div className="flex-1 p-6">
+            {children}
+          </div>
         </main>
       </div>
 
@@ -344,12 +361,16 @@ const AppContent: React.FC = () => {
 
   const handleFormSubmit = async (formData: any) => {
     if (!activeType) return;
-    if (editingId) {
-      await updateEntity(activeType, editingId, formData);
-    } else {
-      await addEntity(activeType, formData);
+    try {
+        if (editingId) {
+          await updateEntity(activeType, editingId, formData);
+        } else {
+          await addEntity(activeType, formData);
+        }
+        setModalOpen(false);
+    } catch (e: any) {
+        alert(`Operation failed: ${e.message}`);
     }
-    setModalOpen(false);
   };
 
   const currentColumns = activeType ? (COLUMNS[activeType] || DEFAULT_COLUMNS) : [];
