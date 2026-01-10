@@ -235,26 +235,26 @@ export const EntityList: React.FC<EntityListProps> = ({
 
     return (
       <div className="flex flex-wrap items-center gap-3 bg-indigo-50 border border-indigo-100 p-3 rounded-xl animate-fade-in mb-4 shadow-sm">
-        <div className="flex items-center text-indigo-700 text-xs font-bold uppercase tracking-wider mr-4">
+        <div className="flex items-center text-indigo-700 text-[10px] font-black uppercase tracking-widest mr-4">
           <Shield className="w-4 h-4 mr-2" />
-          {selectedIds.size} Users Selected
+          {selectedIds.size} SELECTED
         </div>
         <div className="h-6 w-px bg-indigo-200 mx-2 hidden sm:block"></div>
         <div className="relative group">
-          <button className="flex items-center px-3 py-1.5 bg-white border border-indigo-200 rounded-lg text-xs font-semibold text-indigo-700 hover:bg-indigo-600 hover:text-white transition-all shadow-sm">
+          <button className="flex items-center px-3 py-1.5 bg-white border border-indigo-200 rounded-lg text-xs font-bold text-indigo-700 hover:bg-indigo-600 hover:text-white transition-all shadow-sm">
             Assign Role <ChevronDown className="w-3 h-3 ml-2" />
           </button>
           <div className="absolute top-full left-0 mt-1 w-40 bg-white border border-slate-200 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-all z-20 overflow-hidden">
             {['Admin', 'Manager', 'Sales Agent', 'Accountant', 'Viewer'].map(role => (
-              <button key={role} onClick={() => handleBulkUpdate({ role })} className="w-full text-left px-4 py-2 text-xs hover:bg-indigo-50 text-slate-700 transition-colors border-b border-slate-50 last:border-0">{role}</button>
+              <button key={role} onClick={() => handleBulkUpdate({ role })} className="w-full text-left px-4 py-2 text-xs font-semibold hover:bg-indigo-50 text-slate-700 transition-colors border-b border-slate-50 last:border-0">{role}</button>
             ))}
           </div>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => handleBulkUpdate({ status: 'Active' })} className="flex items-center px-3 py-1.5 bg-white border border-emerald-200 rounded-lg text-xs font-semibold text-emerald-700 hover:bg-emerald-600 hover:text-white transition-all shadow-sm"><UserCheck className="w-3.5 h-3.5 mr-2" /> Activate</button>
-          <button onClick={() => handleBulkUpdate({ status: 'Suspended' })} className="flex items-center px-3 py-1.5 bg-white border border-red-200 rounded-lg text-xs font-semibold text-red-700 hover:bg-red-600 hover:text-white transition-all shadow-sm"><ToggleLeft className="w-3.5 h-3.5 mr-2" /> Deactivate</button>
+          <button onClick={() => handleBulkUpdate({ status: 'Active' })} className="flex items-center px-3 py-1.5 bg-white border border-emerald-200 rounded-lg text-xs font-bold text-emerald-700 hover:bg-emerald-600 hover:text-white transition-all shadow-sm"><UserCheck className="w-3.5 h-3.5 mr-2" /> Activate</button>
+          <button onClick={() => handleBulkUpdate({ status: 'Suspended' })} className="flex items-center px-3 py-1.5 bg-white border border-red-200 rounded-lg text-xs font-bold text-red-700 hover:bg-red-600 hover:text-white transition-all shadow-sm"><ToggleLeft className="w-3.5 h-3.5 mr-2" /> Deactivate</button>
         </div>
-        <button onClick={() => setSelectedIds(new Set())} className="ml-auto text-xs font-medium text-indigo-400 hover:text-indigo-600">Deselect All</button>
+        <button onClick={() => setSelectedIds(new Set())} className="ml-auto text-[10px] font-black text-indigo-400 hover:text-indigo-600 uppercase">Clear</button>
       </div>
     );
   };
@@ -273,78 +273,134 @@ export const EntityList: React.FC<EntityListProps> = ({
           'Inactive': 'bg-slate-100 text-slate-700',
           'Sent': 'bg-blue-100 text-blue-700' 
       };
-      return <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[value] || 'bg-slate-100'}`}>{value}</span>;
+      return <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-tighter ${statusColors[value] || 'bg-slate-100 text-slate-600'}`}>{value}</span>;
     }
     return value;
   };
 
   return (
-    <div className="space-y-6 animate-fade-in relative">
+    <div className="space-y-4 sm:space-y-6 animate-fade-in relative min-w-0">
       {isBulkActionLoading && (
-        <div className="fixed inset-0 z-50 bg-white/50 backdrop-blur-[2px] flex items-center justify-center">
-           <div className="bg-white p-6 rounded-2xl shadow-2xl flex flex-col items-center border border-indigo-100">
-             <Loader2 className="w-10 h-10 text-indigo-600 animate-spin mb-3" />
-             <p className="text-indigo-900 font-bold">Applying shared updates...</p>
+        <div className="fixed inset-0 z-50 bg-white/60 backdrop-blur-sm flex items-center justify-center">
+           <div className="bg-white p-8 rounded-3xl shadow-2xl flex flex-col items-center border border-indigo-100 text-center mx-4">
+             <div className="relative mb-4">
+                <Loader2 className="w-12 h-12 text-indigo-600 animate-spin" />
+                <div className="absolute inset-0 flex items-center justify-center">
+                    <Shield className="w-5 h-5 text-indigo-400" />
+                </div>
+             </div>
+             <p className="text-slate-900 font-extrabold tracking-tight">Synchronizing Bulk Updates</p>
+             <p className="text-slate-500 text-xs mt-1">Applying structural changes to the database pool...</p>
            </div>
         </div>
       )}
 
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div className="flex items-center gap-4">
-          <button onClick={() => navigate('/')} className="p-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-500 transition-colors"><ArrowLeft className="w-5 h-5" /></button>
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">{title}</h1>
-            <p className="text-slate-500 text-sm">Manage your {title.toLowerCase()} records</p>
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div className="flex items-center gap-4 min-w-0">
+          <button 
+            onClick={() => navigate('/')} 
+            className="p-2.5 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-500 transition-all hover:shadow-sm shrink-0"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 truncate tracking-tight">{title}</h1>
+            <p className="text-slate-500 text-[11px] font-bold uppercase tracking-widest leading-none mt-1">
+              Data Management Repository
+            </p>
           </div>
         </div>
-        <div className="flex gap-3">
-          <button className="px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg text-sm font-medium flex items-center hover:bg-slate-50 transition-colors"><Filter className="w-4 h-4 mr-2" />Filter</button>
-          <button onClick={onAdd} className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium flex items-center shadow-md hover:bg-indigo-700 transition-all"><Plus className="w-4 h-4 mr-2" />New Entry</button>
+        <div className="flex gap-2 sm:gap-3 w-full md:w-auto shrink-0">
+          <button className="flex-1 md:flex-none px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-bold flex items-center justify-center hover:bg-slate-50 transition-all">
+            <Filter className="w-4 h-4 mr-2" />Filter
+          </button>
+          <button 
+            onClick={onAdd} 
+            className="flex-1 md:flex-none px-4 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-bold flex items-center justify-center shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all hover:-translate-y-0.5 active:translate-y-0"
+          >
+            <Plus className="w-4 h-4 mr-2" />New Entry
+          </button>
         </div>
       </div>
 
-      <div className="relative">
-        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Search className="h-5 w-5 text-slate-400" /></div>
-        <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="block w-full pl-10 pr-3 py-3 bg-white border border-slate-200 rounded-xl sm:text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all shadow-sm" placeholder={`Search in ${title.toLowerCase()}...`} />
+      <div className="relative group">
+        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none transition-colors group-focus-within:text-indigo-500">
+            <Search className="h-5 w-5 text-slate-400 group-focus-within:text-indigo-500" />
+        </div>
+        <input 
+            type="text" 
+            value={searchTerm} 
+            onChange={(e) => setSearchTerm(e.target.value)} 
+            className="block w-full pl-12 pr-4 py-3 sm:py-3.5 bg-white border border-slate-200 rounded-2xl text-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all shadow-sm placeholder:text-slate-400 placeholder:font-medium" 
+            placeholder={`Search across ${data.length} records in ${title.toLowerCase()}...`} 
+        />
       </div>
 
       {renderBulkActions()}
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+        <div className="overflow-x-auto no-scrollbar">
+          <table className="w-full text-left border-collapse min-w-[800px]">
             <thead>
-              <tr className="bg-slate-50 border-b border-slate-200">
-                <th className="px-6 py-4 w-10">
-                   <button onClick={toggleSelectAll} className="text-slate-400 hover:text-indigo-600 transition-colors">
-                      {selectedIds.size === filteredData.length && filteredData.length > 0 ? <CheckSquare className="w-5 h-5 text-indigo-600" /> : <Square className="w-5 h-5" />}
+              <tr className="bg-slate-50/50 border-b border-slate-100">
+                <th className="px-6 py-4 w-14">
+                   <button 
+                     onClick={toggleSelectAll} 
+                     className="text-slate-300 hover:text-indigo-600 transition-colors p-1"
+                   >
+                      {selectedIds.size === filteredData.length && filteredData.length > 0 ? (
+                        <CheckSquare className="w-5 h-5 text-indigo-600" />
+                      ) : (
+                        <Square className="w-5 h-5" />
+                      )}
                    </button>
                 </th>
-                {columns.map((col) => col.type !== 'items' && <th key={col.key} className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">{col.label}</th>)}
-                <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Actions</th>
+                {columns.map((col) => col.type !== 'items' && (
+                    <th key={col.key} className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                        {col.label}
+                    </th>
+                ))}
+                <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right sticky right-0 bg-slate-50/50">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-50">
               {filteredData.length === 0 ? (
-                <tr><td colSpan={columns.length + 2} className="px-6 py-12 text-center text-slate-500">No records found.</td></tr>
+                <tr>
+                    <td colSpan={columns.length + 2} className="px-6 py-20 text-center">
+                        <div className="flex flex-col items-center opacity-40">
+                            <Search className="w-12 h-12 mb-3 text-slate-300" />
+                            <p className="text-slate-500 font-bold text-sm">No records found matching your criteria</p>
+                            <p className="text-slate-400 text-xs mt-1">Try adjusting your filters or search terms</p>
+                        </div>
+                    </td>
+                </tr>
               ) : (
                 filteredData.map((item) => (
-                  <tr key={item.id} className={`hover:bg-slate-50/80 transition-colors ${selectedIds.has(item.id) ? 'bg-indigo-50/40' : ''}`}>
+                  <tr key={item.id} className={`hover:bg-slate-50/50 transition-colors group ${selectedIds.has(item.id) ? 'bg-indigo-50/40' : ''}`}>
                     <td className="px-6 py-4">
-                       <button onClick={() => toggleSelectOne(item.id)} className="text-slate-400 hover:text-indigo-600 transition-colors">
-                          {selectedIds.has(item.id) ? <CheckSquare className="w-5 h-5 text-indigo-600" /> : <Square className="w-5 h-5" />}
+                       <button 
+                         onClick={() => toggleSelectOne(item.id)} 
+                         className="text-slate-300 hover:text-indigo-600 transition-colors p-1"
+                       >
+                          {selectedIds.has(item.id) ? (
+                            <CheckSquare className="w-5 h-5 text-indigo-600" />
+                          ) : (
+                            <Square className="w-5 h-5" />
+                          )}
                        </button>
                     </td>
-                    {columns.map((col) => col.type !== 'items' && <td key={col.key} className="px-6 py-4 text-sm text-slate-700 whitespace-nowrap">
-                        {renderCell(item[col.key], col.type, col.key)}
-                    </td>)}
-                    <td className="px-6 py-4 text-right whitespace-nowrap">
-                      <div className="flex justify-end gap-2">
-                        <button onClick={() => setViewingItem(item)} className="p-1.5 text-slate-500 hover:text-blue-600 rounded transition-colors" title="View"><Eye className="w-4 h-4" /></button>
-                        {currentPath === EntityType.SALES_INVOICES && item.status !== 'Paid' && <button onClick={() => setPaymentItem(item)} className="p-1.5 text-slate-500 hover:text-emerald-600 rounded transition-colors" title="Payment"><Wallet className="w-4 h-4" /></button>}
-                        <button onClick={() => handleDownloadPDF(item)} className="p-1.5 text-slate-500 hover:text-indigo-600 rounded transition-colors" title="Download PDF"><FileDown className="w-4 h-4" /></button>
-                        <button onClick={() => onEdit(item.id)} className="p-1.5 text-slate-500 hover:text-indigo-600 rounded transition-colors"><Edit2 className="w-4 h-4" /></button>
-                        <button onClick={() => onDelete(item.id)} className="p-1.5 text-slate-500 hover:text-red-600 rounded transition-colors"><Trash2 className="w-4 h-4" /></button>
+                    {columns.map((col) => col.type !== 'items' && (
+                        <td key={col.key} className="px-6 py-4 text-sm font-semibold text-slate-700 whitespace-nowrap">
+                            {renderCell(item[col.key], col.type, col.key)}
+                        </td>
+                    ))}
+                    <td className="px-6 py-4 text-right whitespace-nowrap sticky right-0 bg-white group-hover:bg-slate-50/50 transition-colors">
+                      <div className="flex justify-end gap-1 sm:gap-2">
+                        <button onClick={() => setViewingItem(item)} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all" title="View Detail"><Eye className="w-4.5 h-4.5" /></button>
+                        {currentPath === EntityType.SALES_INVOICES && item.status !== 'Paid' && <button onClick={() => setPaymentItem(item)} className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all" title="Record Receipt"><Wallet className="w-4.5 h-4.5" /></button>}
+                        <button onClick={() => handleDownloadPDF(item)} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all" title="Export PDF"><FileDown className="w-4.5 h-4.5" /></button>
+                        <button onClick={() => onEdit(item.id)} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all" title="Modify Entry"><Edit2 className="w-4.5 h-4.5" /></button>
+                        <button onClick={() => onDelete(item.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all" title="Remove Entry"><Trash2 className="w-4.5 h-4.5" /></button>
                       </div>
                     </td>
                   </tr>
@@ -355,31 +411,59 @@ export const EntityList: React.FC<EntityListProps> = ({
         </div>
       </div>
 
-      <Modal isOpen={!!viewingItem} onClose={() => setViewingItem(null)} title="Record Details">
-        {viewingItem && <div className="space-y-4">
-          <div className="flex justify-between items-center bg-slate-50 p-4 rounded-lg border border-slate-200">
-            <div><p className="text-xs text-slate-500 uppercase tracking-wider mb-1">System Reference</p><p className="text-lg font-bold text-slate-800">{viewingItem.id}</p></div>
-            <button onClick={() => handleDownloadPDF(viewingItem)} className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold shadow-sm hover:bg-indigo-700 transition-colors">Generate PDF</button>
+      <Modal isOpen={!!viewingItem} onClose={() => setViewingItem(null)} title="Detailed Record Analytics">
+        {viewingItem && <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-slate-50 p-5 rounded-2xl border border-slate-200 gap-4">
+            <div>
+                <p className="text-[10px] text-slate-400 uppercase font-black tracking-widest mb-1">Audit Reference</p>
+                <p className="text-xl font-black text-slate-800 tracking-tight">{viewingItem.id}</p>
+            </div>
+            <button 
+                onClick={() => handleDownloadPDF(viewingItem)} 
+                className="w-full sm:w-auto px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all"
+            >
+                Generate Document
+            </button>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {columns.filter(c => c.type !== 'items' && c.key !== 'id').map(c => (
-              <div key={c.key} className="p-3 bg-white border border-slate-100 rounded-lg shadow-sm">
-                <p className="text-[10px] text-slate-400 uppercase font-bold tracking-widest mb-1">{c.label}</p>
-                <p className="text-sm font-medium text-slate-700">
+              <div key={c.key} className="p-4 bg-white border border-slate-100 rounded-2xl shadow-sm group hover:border-indigo-200 transition-colors">
+                <p className="text-[10px] text-slate-400 uppercase font-black tracking-widest mb-1.5 group-hover:text-indigo-400 transition-colors">{c.label}</p>
+                <p className="text-sm font-bold text-slate-800">
                   {renderCell(viewingItem[c.key], c.type, c.key === 'pin' ? 'visible-pin' : c.key)}
                 </p>
               </div>
             ))}
           </div>
-          {viewingItem.items && viewingItem.items.length > 0 && <div>
-            <h4 className="text-sm font-bold text-slate-800 mb-2 px-1">Line Items</h4>
-            <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-              <table className="w-full text-sm text-left">
-                <thead className="bg-slate-50"><tr><th className="px-3 py-2 text-slate-500">Description</th><th className="px-3 py-2 text-center text-slate-500">Qty</th><th className="px-3 py-2 text-right text-slate-500">Price</th><th className="px-3 py-2 text-right text-slate-500">Total</th></tr></thead>
-                <tbody className="divide-y divide-slate-100">{viewingItem.items.map((i: any, idx: number) => <tr key={idx} className="bg-white"><td className="px-3 py-2 text-slate-700">{i.description}</td><td className="px-3 py-2 text-center text-slate-600">{i.quantity}</td><td className="px-3 py-2 text-right text-slate-600">{renderCell(i.unitPrice, 'currency', 'price')}</td><td className="px-3 py-2 text-right font-semibold text-slate-800">{renderCell(i.total, 'currency', 'total')}</td></tr>)}</tbody>
-              </table>
+          {viewingItem.items && viewingItem.items.length > 0 && (
+            <div className="animate-fade-in">
+                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 px-1">Inventory & Services Payload</h4>
+                <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                    <div className="overflow-x-auto no-scrollbar">
+                        <table className="w-full text-xs text-left">
+                            <thead className="bg-slate-50/50 border-b border-slate-100">
+                                <tr>
+                                    <th className="px-4 py-3 text-slate-400 font-bold uppercase">Product / Task</th>
+                                    <th className="px-4 py-3 text-center text-slate-400 font-bold uppercase">Qty</th>
+                                    <th className="px-4 py-3 text-right text-slate-400 font-bold uppercase">Rate</th>
+                                    <th className="px-4 py-3 text-right text-slate-400 font-bold uppercase">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                                {viewingItem.items.map((i: any, idx: number) => (
+                                    <tr key={idx} className="bg-white hover:bg-slate-50/30 transition-colors">
+                                        <td className="px-4 py-3 text-slate-800 font-bold">{i.description}</td>
+                                        <td className="px-4 py-3 text-center font-bold text-slate-600">{i.quantity}</td>
+                                        <td className="px-4 py-3 text-right text-slate-600">{renderCell(i.unitPrice, 'currency', 'price')}</td>
+                                        <td className="px-4 py-3 text-right font-black text-slate-900">{renderCell(i.total, 'currency', 'total')}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
-          </div>}
+          )}
         </div>}
       </Modal>
 

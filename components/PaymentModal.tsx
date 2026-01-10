@@ -1,5 +1,7 @@
+
 import React, { useState, useEffect } from 'react';
-import { X, DollarSign, Calendar, CreditCard, FileText, Calculator } from 'lucide-react';
+// Added missing ChevronDown import from lucide-react
+import { X, DollarSign, Calendar, CreditCard, FileText, Calculator, ChevronDown } from 'lucide-react';
 import { useData } from '../context/DataContext';
 import { EntityType, GenericEntity } from '../types';
 
@@ -16,21 +18,17 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, inv
   const [accountId, setAccountId] = useState('');
   const [reference, setReference] = useState('');
   
-  // Calculate what has already been paid and what is left
   const totalAmount = invoice?.amount || 0;
   const previouslyPaid = invoice?.amountPaid || 0;
   const outstandingBalance = totalAmount - previouslyPaid;
 
-  // Load Bank/Cash Accounts
   const accounts = data[EntityType.BANK_CASH] || [];
 
   useEffect(() => {
     if (invoice) {
-      // Default the input to the outstanding balance, not the full total (unless nothing paid yet)
       setAmount(invoice.amount - (invoice.amountPaid || 0));
       setReference(`PAY-${Date.now().toString().substr(-6)}`);
       
-      // Default to first bank account if available
       if (accounts.length > 0 && !accountId) {
         setAccountId(accounts[0].id);
       }
@@ -42,17 +40,17 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, inv
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!accountId) {
-      alert("Please select a valid Bank/Cash account to deposit funds into.");
+      alert("Please select a target Bank/Cash account.");
       return;
     }
     
     if (amount <= 0) {
-        alert("Payment amount must be greater than zero.");
+        alert("Amount must be a positive value.");
         return;
     }
 
     if (amount > outstandingBalance) {
-        if(!window.confirm(`You are entering a payment (KES ${amount}) higher than the outstanding balance (KES ${outstandingBalance}). Continue?`)) {
+        if(!window.confirm(`Overpayment detected. Record receipt of KES ${amount}?`)) {
             return;
         }
     }
@@ -65,43 +63,45 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, inv
   const remainingAfterPayment = outstandingBalance - amount;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 overflow-hidden">
       <div 
-        className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm transition-opacity" 
+        className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" 
         onClick={onClose}
       />
       
-      <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-fade-in-up">
+      <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-md max-h-[95vh] overflow-hidden animate-fade-in-up flex flex-col border border-slate-200">
         {/* Header */}
-        <div className="bg-emerald-600 px-6 py-4 flex items-center justify-between text-white">
-          <div className="flex items-center space-x-2">
-            <DollarSign className="w-5 h-5" />
-            <h3 className="text-lg font-semibold">Receive Payment</h3>
+        <div className="bg-emerald-600 px-6 py-5 flex items-center justify-between text-white shrink-0">
+          <div className="flex items-center space-x-3">
+            <div className="p-2 bg-emerald-500/50 rounded-lg">
+                <DollarSign className="w-5 h-5" />
+            </div>
+            <h3 className="text-lg font-extrabold tracking-tight">Post Payment Receipt</h3>
           </div>
-          <button onClick={onClose} className="text-emerald-100 hover:text-white transition-colors">
-            <X className="w-5 h-5" />
+          <button onClick={onClose} className="p-2 hover:bg-emerald-500 rounded-lg transition-colors">
+            <X className="w-5 h-5 text-emerald-100" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+        <form onSubmit={handleSubmit} className="p-6 space-y-6 overflow-y-auto custom-scrollbar flex-1">
           {/* Invoice Summary */}
-          <div className="bg-slate-50 p-4 rounded-lg border border-slate-100 space-y-2">
-            <div className="flex justify-between items-center border-b border-slate-200 pb-2">
+          <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 space-y-3">
+            <div className="flex justify-between items-center border-b border-slate-200 pb-3">
                 <div>
-                    <p className="text-xs text-slate-500 uppercase">Ref #</p>
-                    <p className="font-semibold text-slate-700">{invoice.id}</p>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest leading-none mb-1">Source Doc</p>
+                    <p className="font-extrabold text-slate-700 tracking-tight">{invoice.id}</p>
                 </div>
                 <div className="text-right">
-                    <p className="text-xs text-slate-500 uppercase">Invoice Total</p>
-                    <p className="font-bold text-slate-700">{currencyFormatter.format(totalAmount)}</p>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest leading-none mb-1">Total Bill</p>
+                    <p className="font-black text-slate-900">{currencyFormatter.format(totalAmount)}</p>
                 </div>
             </div>
-            <div className="flex justify-between items-center text-sm">
-                 <span className="text-slate-500">Previously Paid:</span>
-                 <span className="text-slate-700">{currencyFormatter.format(previouslyPaid)}</span>
+            <div className="flex justify-between items-center text-xs font-semibold">
+                 <span className="text-slate-500">Already Received:</span>
+                 <span className="text-slate-800">{currencyFormatter.format(previouslyPaid)}</span>
             </div>
-            <div className="flex justify-between items-center text-sm font-medium">
-                 <span className="text-slate-500">Outstanding Balance:</span>
+            <div className="flex justify-between items-center text-xs font-bold">
+                 <span className="text-slate-500">Unpaid Balance:</span>
                  <span className="text-red-600">{currencyFormatter.format(outstandingBalance)}</span>
             </div>
           </div>
@@ -109,58 +109,58 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, inv
           <div className="space-y-4">
             {/* Amount Input */}
             <div>
-              <label className="text-sm font-medium text-slate-700 mb-1 block">Payment Amount Received</label>
-              <div className="relative">
-                 <span className="absolute left-3 top-2.5 text-slate-400 font-bold">KES</span>
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 block px-1">Receipt Amount (KES)</label>
+              <div className="relative group">
+                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-black text-xs transition-colors group-focus-within:text-emerald-500">KES</span>
                  <input 
                     type="number" 
                     value={amount}
                     onChange={(e) => setAmount(Number(e.target.value))}
-                    className="w-full pl-12 pr-4 py-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-medium text-slate-900"
+                    className="w-full pl-14 pr-4 py-3 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 font-black text-slate-900 text-lg transition-all"
                     min="0"
                     step="0.01"
                     required
                  />
               </div>
-              {/* Dynamic Balance Calculation */}
-              <div className="mt-2 flex items-center text-xs">
-                  <Calculator className="w-3 h-3 mr-1 text-slate-400" />
-                  <span className="text-slate-500 mr-1">Balance after this payment:</span>
-                  <span className={`font-bold ${remainingAfterPayment > 0 ? 'text-red-500' : 'text-emerald-600'}`}>
+              <div className="mt-2 flex items-center text-[10px] font-bold px-1">
+                  <Calculator className="w-3 h-3 mr-1.5 text-slate-400" />
+                  <span className="text-slate-400 mr-1 uppercase tracking-tighter">Projected Post-Transaction Balance:</span>
+                  <span className={`font-black ${remainingAfterPayment > 0 ? 'text-red-500' : 'text-emerald-600'}`}>
                       {currencyFormatter.format(remainingAfterPayment > 0 ? remainingAfterPayment : 0)}
                   </span>
-                  {remainingAfterPayment <= 0 && <span className="ml-2 text-emerald-600 font-bold">(Fully Paid)</span>}
-                  {remainingAfterPayment > 0 && <span className="ml-2 text-amber-600">(Deficit)</span>}
+                  {remainingAfterPayment <= 0 && <span className="ml-2 text-emerald-600 px-1.5 py-0.5 bg-emerald-50 rounded uppercase text-[8px] font-black">Settled</span>}
               </div>
             </div>
 
             {/* Deposit To Account */}
             <div>
-              <label className="text-sm font-medium text-slate-700 mb-1 block">Deposit To (Account)</label>
-              <div className="relative">
-                <div className="absolute left-3 top-2.5 text-slate-400">
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 block px-1">Destination Portfolio</label>
+              <div className="relative group">
+                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-emerald-500 transition-colors">
                   <CreditCard className="w-4 h-4" />
                 </div>
                 <select
                   required
                   value={accountId}
                   onChange={(e) => setAccountId(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                  className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 text-sm font-bold transition-all appearance-none"
                 >
-                  <option value="" disabled>Select Account</option>
+                  <option value="" disabled>Select Target Account</option>
                   {accounts.map(acc => (
-                    <option key={acc.id} value={acc.id}>{acc.name} ({acc.bank})</option>
+                    <option key={acc.id} value={acc.id}>{acc.name} - {acc.bank}</option>
                   ))}
                 </select>
+                {/* Fixed ChevronDown missing import and usage on line 151 */}
+                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Date */}
                 <div>
-                <label className="text-sm font-medium text-slate-700 mb-1 block">Payment Date</label>
-                <div className="relative">
-                    <div className="absolute left-3 top-2.5 text-slate-400">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 block px-1">Posting Date</label>
+                <div className="relative group">
+                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-emerald-500 transition-colors">
                     <Calendar className="w-4 h-4" />
                     </div>
                     <input
@@ -168,16 +168,16 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, inv
                     required
                     value={date}
                     onChange={(e) => setDate(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                    className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 text-sm font-bold transition-all"
                     />
                 </div>
                 </div>
 
                 {/* Reference */}
                 <div>
-                <label className="text-sm font-medium text-slate-700 mb-1 block">Reference / Cheque #</label>
-                <div className="relative">
-                    <div className="absolute left-3 top-2.5 text-slate-400">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 block px-1">Receipt ID / Ref</label>
+                <div className="relative group">
+                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-emerald-500 transition-colors">
                     <FileText className="w-4 h-4" />
                     </div>
                     <input
@@ -185,8 +185,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, inv
                     required
                     value={reference}
                     onChange={(e) => setReference(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
-                    placeholder="e.g. TRX-123"
+                    className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 text-sm font-bold transition-all"
+                    placeholder="Ref ID"
                     />
                 </div>
                 </div>
@@ -195,10 +195,10 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, inv
 
           <button
             type="submit"
-            className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg shadow-sm shadow-emerald-200 transition-all flex justify-center items-center"
+            className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-2xl shadow-xl shadow-emerald-100 transition-all flex justify-center items-center hover:-translate-y-0.5 active:translate-y-0 uppercase tracking-widest text-xs"
           >
             <DollarSign className="w-4 h-4 mr-2" />
-            {remainingAfterPayment > 0 ? 'Record Partial Payment' : 'Confirm Full Payment'}
+            {remainingAfterPayment > 0 ? 'Record Part-Settlement' : 'Finalize Settlement'}
           </button>
         </form>
       </div>
