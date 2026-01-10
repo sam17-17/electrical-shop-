@@ -1,9 +1,9 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { EntityType, EntityState, GenericEntity } from '../types';
+import { EntityType, EntityState, GenericEntity, LineItem } from '../types';
 import { getSupabase } from '../services/supabase';
 import { useAuth } from './AuthContext';
 
-const APP_VERSION = '2.6.0';
+const APP_VERSION = '2.7.0';
 
 interface DataContextType {
   data: EntityState;
@@ -201,6 +201,20 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const updatedEntity = { ...target, ...entity };
     const oldState = data;
     const newState = { ...data, [type]: currentItems.map(item => item.id === id ? updatedEntity : item) };
+    
+    // Logic: If status changes to 'Dispatched' on a Delivery Note, deduct inventory
+    if (type === EntityType.DELIVERY_NOTES && entity.status === 'Dispatched' && target.status !== 'Dispatched') {
+        const items = target.items || [];
+        for (const item of items) {
+            const invItem = data[EntityType.INVENTORY].find(i => i.name === item.description);
+            if (invItem) {
+                const newStock = Math.max(0, Number(invItem.stock) - Number(item.quantity));
+                // Internal call to avoid recursion but update inventory
+                await updateEntity(EntityType.INVENTORY, invItem.id, { stock: newStock });
+            }
+        }
+    }
+
     setData(newState);
     saveLocalData(newState);
     if (isDemoMode || !supabase || dbNeedsSetup) return;
@@ -218,24 +232,27 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (error) { setData(oldState); throw new Error(error.message); }
   };
 
-  /**
-   * LINKING ENGINE:
-   * Maps fields from source document to target document automatically.
-   */
   const convertEntity = async (sourceType: EntityType, targetType: EntityType, sourceId: string) => {
     const source = data[sourceType].find(i => i.id === sourceId);
     if (!source) throw new Error("Source document not found");
 
     const prefixMap: Record<string, string> = {
-        [EntityType.SALES_ORDERS]: 'RCP-',
-        [EntityType.DELIVERY_NOTES]: 'DN-',
+        [EntityType.SALES_ORDERS]: 'ORD-',
+        [EntityType.DELIVERY_NOTES]: 'DEL-',
         [EntityType.SALES_INVOICES]: 'INV-'
     };
 
-    const nextId = generateUUID();
     const prefix = prefixMap[targetType] || 'DOC-';
     const existing = data[targetType] || [];
-    const docRef = `${prefix}${existing.length + 1001}`;
+    
+    // Robust DocRef calculation: find the highest number
+    let maxNum = 1000;
+    existing.forEach(e => {
+        const ref = String(e.docRef || '');
+        const numPart = parseInt(ref.split('-')[1]);
+        if (!isNaN(numPart) && numPart > maxNum) maxNum = numPart;
+    });
+    const docRef = `${prefix}${maxNum + 1}`;
 
     const common = {
         customer: source.customer,
@@ -249,12 +266,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     let specific = {};
     if (targetType === EntityType.SALES_ORDERS) specific = { status: 'Confirmed' };
-    if (targetType === EntityType.DELIVERY_NOTES) specific = { status: 'Dispatched' };
+    if (targetType === EntityType.DELIVERY_NOTES) specific = { status: 'Draft' };
     if (targetType === EntityType.SALES_INVOICES) specific = { status: 'Unpaid', amountPaid: 0 };
 
     await addEntity(targetType, { ...common, ...specific });
     
-    // Optional: Mark source as converted/accepted
     if (sourceType === EntityType.SALES_QUOTES) {
         await updateEntity(sourceType, sourceId, { status: 'Accepted' });
     }

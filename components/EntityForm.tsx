@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { DataColumn, GenericEntity, LineItem, EntityType } from '../types';
 import { Plus, Trash2, RefreshCw, Key, Loader2, AlertCircle } from 'lucide-react';
@@ -43,16 +42,24 @@ export const EntityForm: React.FC<EntityFormProps> = ({ columns, initialData, on
              const prefixMap: Record<string, string> = {
                  [EntityType.SALES_INVOICES]: 'INV-',
                  [EntityType.SALES_QUOTES]: 'QTN-',
-                 [EntityType.SALES_ORDERS]: 'RCP-',
-                 [EntityType.DELIVERY_NOTES]: 'DN-',
+                 [EntityType.SALES_ORDERS]: 'ORD-',
+                 [EntityType.DELIVERY_NOTES]: 'DEL-',
                  [EntityType.PURCHASE_ORDERS]: 'PO-',
                  [EntityType.PURCHASE_QUOTES]: 'PQ-',
                  [EntityType.PURCHASE_INVOICES]: 'PINV-'
              };
              const prefix = prefixMap[entityType] || 'DOC-';
              const existing = data[entityType] || [];
-             const count = existing.length + 1001;
-             defaults['docRef'] = `${prefix}${count}`;
+             
+             // Smart count based on max existing ref
+             let maxNum = 1000;
+             existing.forEach(e => {
+                 const ref = String(e.docRef || '');
+                 const numPart = parseInt(ref.split('-')[1]);
+                 if (!isNaN(numPart) && numPart > maxNum) maxNum = numPart;
+             });
+             
+             defaults['docRef'] = `${prefix}${maxNum + 1}`;
          }
       }
 
@@ -93,11 +100,6 @@ export const EntityForm: React.FC<EntityFormProps> = ({ columns, initialData, on
         }
         return newData;
     });
-  };
-
-  const generatePin = () => {
-    const pin = Math.floor(1000 + Math.random() * 9000).toString();
-    handleChange('pin', pin);
   };
 
   const handleAddItem = () => {
@@ -156,7 +158,6 @@ export const EntityForm: React.FC<EntityFormProps> = ({ columns, initialData, on
     setError(null);
     setIsSubmitting(true);
     
-    // Auto-trim all string fields to help with duplicate detection
     const cleanData = { ...formData };
     Object.keys(cleanData).forEach(key => {
       if (typeof cleanData[key] === 'string') {
@@ -191,7 +192,7 @@ export const EntityForm: React.FC<EntityFormProps> = ({ columns, initialData, on
                         type="text" 
                         value={displayValue} 
                         disabled 
-                        className="w-full px-3 py-2 bg-slate-100 border border-slate-300 rounded-lg text-slate-500 text-sm"
+                        className="w-full px-3 py-2 bg-slate-100 border border-slate-300 rounded-lg text-slate-500 text-sm font-bold"
                     />
                 </div>
              );
@@ -222,11 +223,10 @@ export const EntityForm: React.FC<EntityFormProps> = ({ columns, initialData, on
                         {(formData.items || []).map((item: LineItem) => (
                             <div key={item.id} className="grid grid-cols-12 gap-2 items-end">
                                 <div className="col-span-5">
-                                    <label className="text-[10px] text-slate-500 block mb-1">Description / Product</label>
+                                    <label className="text-[10px] text-slate-500 block mb-1">Product</label>
                                     <input 
                                         list="inventory-list"
                                         type="text" 
-                                        placeholder="Search..."
                                         value={item.description}
                                         onChange={(e) => handleItemChange(item.id, 'description', e.target.value)}
                                         className="w-full px-2 py-1 bg-white border border-slate-200 rounded text-sm"
@@ -257,11 +257,9 @@ export const EntityForm: React.FC<EntityFormProps> = ({ columns, initialData, on
                                         required
                                     />
                                 </div>
-                                <div className="col-span-2">
+                                <div className="col-span-2 text-right">
                                     <label className="text-[10px] text-slate-500 block mb-1">Total</label>
-                                    <div className="w-full px-2 py-1 bg-slate-100 border border-slate-200 rounded text-sm text-right text-slate-600">
-                                        {item.total.toFixed(2)}
-                                    </div>
+                                    <div className="text-xs font-bold text-slate-600 mb-1.5">{item.total.toFixed(2)}</div>
                                 </div>
                                 <div className="col-span-1 flex justify-center pb-1">
                                     <button type="button" onClick={() => handleRemoveItem(item.id)} className="text-red-400 hover:text-red-600">
@@ -282,23 +280,17 @@ export const EntityForm: React.FC<EntityFormProps> = ({ columns, initialData, on
 
             return (
                 <div key={col.key} className="flex flex-col items-end border-t pt-2 space-y-1">
-                     <div className="text-right text-sm text-slate-500">
+                     <div className="text-right text-xs text-slate-500">
                         <span className="mr-4">Subtotal:</span>
-                        <span className="font-medium">
-                            {new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' }).format(subTotal)}
-                        </span>
+                        <span className="font-medium">{new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' }).format(subTotal)}</span>
                      </div>
-                     <div className="text-right text-sm text-slate-500">
+                     <div className="text-right text-xs text-slate-500">
                         <span className="mr-4">VAT (18%):</span>
-                        <span className="font-medium">
-                            {new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' }).format(vat)}
-                        </span>
+                        <span className="font-medium">{new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' }).format(vat)}</span>
                      </div>
                      <div className="text-right">
                         <span className="text-sm text-slate-700 font-bold mr-4">Grand Total:</span>
-                        <span className="text-xl font-bold text-slate-800">
-                            {new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' }).format(calculatedTotal)}
-                        </span>
+                        <span className="text-xl font-bold text-slate-800">{new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' }).format(calculatedTotal)}</span>
                      </div>
                 </div>
             );
@@ -369,17 +361,8 @@ export const EntityForm: React.FC<EntityFormProps> = ({ columns, initialData, on
                   className="w-full pl-10 pr-12 py-2 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm transition-all"
                   placeholder="Enter 4-digit PIN"
                 />
-                <div className="absolute left-3 top-2.5 text-slate-400">
-                  <Key className="w-4 h-4" />
-                </div>
-                <button
-                  type="button"
-                  onClick={generatePin}
-                  className="absolute right-2 top-1.5 p-1.5 text-indigo-500 hover:bg-indigo-50 rounded-md transition-colors"
-                  title="Generate Random PIN"
-                >
-                  <RefreshCw className="w-4 h-4" />
-                </button>
+                <div className="absolute left-3 top-2.5 text-slate-400"><Key className="w-4 h-4" /></div>
+                <button type="button" onClick={() => handleChange('pin', Math.floor(1000 + Math.random() * 9000).toString())} className="absolute right-2 top-1.5 p-1.5 text-indigo-500 hover:bg-indigo-50 rounded-md transition-colors"><RefreshCw className="w-4 h-4" /></button>
               </div>
             )}
             
@@ -398,21 +381,10 @@ export const EntityForm: React.FC<EntityFormProps> = ({ columns, initialData, on
       })}
 
       <div className="flex justify-end gap-3 pt-4 mt-4 border-t border-slate-100">
-        <button
-          type="button"
-          onClick={onCancel}
-          disabled={isSubmitting}
-          className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors focus:outline-none focus:ring-2 focus:ring-slate-200 disabled:opacity-50"
-        >
-          Cancel
-        </button>
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 disabled:opacity-70 disabled:cursor-not-allowed flex items-center"
-        >
+        <button type="button" onClick={onCancel} disabled={isSubmitting} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50">Cancel</button>
+        <button type="submit" disabled={isSubmitting} className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center">
           {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-          {initialData ? 'Update' : 'Create'}
+          {initialData ? 'Update Record' : 'Create Record'}
         </button>
       </div>
     </form>

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { HashRouter as Router, Routes, Route, NavLink, useLocation, Navigate, Link } from 'react-router-dom';
 import { 
@@ -104,7 +105,13 @@ const COLUMNS: Record<string, DataColumn[]> = {
 
 function SALES_QUOTES_COLS() { return SALES_COLUMNS_BASE.map(c => c.key === 'status' ? { ...c, options: ['Draft', 'Sent', 'Accepted', 'Rejected'] } : c); }
 function SALES_ORDERS_COLS() { return SALES_COLUMNS_BASE.map(c => c.key === 'status' ? { ...c, options: ['Pending', 'Confirmed', 'Shipped', 'Cancelled'] } : c).map(c => c.key === 'date' ? { ...c, label: 'Receipt Date' } : c); }
-function SALES_INVOICES_COLS() { return SALES_COLUMNS_BASE.map(c => c.key === 'status' ? { ...c, options: ['Draft', 'Sent', 'Paid', 'Unpaid', 'Overdue'] } : c); }
+function SALES_INVOICES_COLS() { 
+  const cols = [...SALES_COLUMNS_BASE];
+  // Insert amountPaid before status
+  const statusIdx = cols.findIndex(c => c.key === 'status');
+  cols.splice(statusIdx, 0, { key: 'amountPaid', label: 'Paid', type: 'currency' });
+  return cols.map(c => c.key === 'status' ? { ...c, options: ['Draft', 'Sent', 'Paid', 'Unpaid', 'Overdue'] } : c); 
+}
 
 const DEFAULT_COLUMNS: DataColumn[] = [
   { key: 'name', label: 'Name', type: 'text', required: true },

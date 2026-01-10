@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { DataColumn, GenericEntity, LineItem, EntityType } from '../types';
 import { 
@@ -44,8 +45,6 @@ export const EntityList: React.FC<EntityListProps> = ({
   const [viewingItem, setViewingItem] = useState<GenericEntity | null>(null);
   const [paymentItem, setPaymentItem] = useState<GenericEntity | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [isBulkActionLoading, setIsBulkActionLoading] = useState(false);
   const [isConverting, setIsConverting] = useState(false);
 
   const handleConvert = async (id: string, targetType: EntityType) => {
@@ -55,7 +54,7 @@ export const EntityList: React.FC<EntityListProps> = ({
         await convertEntity(currentPath, targetType, id);
         navigate(`/${targetType}`);
     } catch (e: any) {
-        alert("Conversion failed: " + e.message);
+        alert("Workflow Error: " + e.message);
     } finally {
         setIsConverting(false);
     }
@@ -77,7 +76,7 @@ export const EntityList: React.FC<EntityListProps> = ({
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(71, 85, 105); 
-    doc.text("Cloud Powered Relationship Management", 14, 32);
+    doc.text("Operational Intelligence Systems", 14, 32);
     doc.setDrawColor(226, 232, 240); 
     doc.setLineWidth(0.5);
     doc.line(14, 45, 196, 45);
@@ -86,15 +85,18 @@ export const EntityList: React.FC<EntityListProps> = ({
     doc.setTextColor(79, 70, 229); 
     doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
+    
     let docTitle = title.toUpperCase().slice(0, -1);
-    if (title === 'Receipts') docTitle = 'PAYMENT RECEIPT';
-    if (title === 'Delivery Notes') docTitle = 'DELIVERY NOTE';
+    if (currentPath === EntityType.SALES_ORDERS) docTitle = 'SALES ORDER';
+    if (currentPath === EntityType.DELIVERY_NOTES) docTitle = 'DELIVERY NOTE';
+    if (currentPath === EntityType.SALES_INVOICES) docTitle = 'SALES INVOICE';
     if (!isTransactionDoc) docTitle = `${docTitle} RECORD`;
+
     doc.text(docTitle, 196, 20, { align: 'right' });
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(30, 41, 59);
-    doc.text(`Ref #: ${item.docRef || item.id || 'N/A'}`, 196, 26, { align: 'right' });
+    doc.text(`Doc Ref: ${item.docRef || item.id || 'N/A'}`, 196, 26, { align: 'right' });
     const itemDate = item.date ? new Date(item.date).toLocaleDateString() : new Date().toLocaleDateString();
     doc.text(`Date: ${itemDate}`, 196, 31, { align: 'right' });
     if (item.status) {
@@ -107,7 +109,7 @@ export const EntityList: React.FC<EntityListProps> = ({
         doc.setFontSize(10);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(71, 85, 105);
-        doc.text("PARTY DETAILS:", 14, 55);
+        doc.text("BILLED TO:", 14, 55);
         doc.setFontSize(11);
         doc.text(item.customer || item.supplier || "N/A", 14, 61);
         doc.setFontSize(10);
@@ -171,7 +173,8 @@ export const EntityList: React.FC<EntityListProps> = ({
       const statusColors: Record<string, string> = { 
           'Paid': 'bg-green-100 text-green-700', 'Active': 'bg-emerald-100 text-emerald-700',
           'Unpaid': 'bg-red-100 text-red-700', 'Sent': 'bg-blue-100 text-blue-700',
-          'Accepted': 'bg-emerald-100 text-emerald-700', 'Confirmed': 'bg-indigo-100 text-indigo-700'
+          'Accepted': 'bg-emerald-100 text-emerald-700', 'Confirmed': 'bg-indigo-100 text-indigo-700',
+          'Dispatched': 'bg-amber-100 text-amber-700'
       };
       return <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-tighter ${statusColors[value] || 'bg-slate-100 text-slate-600'}`}>{value}</span>;
     }
@@ -180,11 +183,11 @@ export const EntityList: React.FC<EntityListProps> = ({
 
   return (
     <div className="space-y-4 sm:space-y-6 animate-fade-in relative min-w-0 pb-10">
-      {(isBulkActionLoading || isConverting) && (
+      {isConverting && (
         <div className="fixed inset-0 z-50 bg-white/60 backdrop-blur-sm flex items-center justify-center">
            <div className="bg-white p-8 rounded-3xl shadow-2xl flex flex-col items-center border border-indigo-100 text-center mx-4 animate-scale-in">
              <Loader2 className="w-12 h-12 text-indigo-600 animate-spin mb-4" />
-             <p className="text-slate-900 font-extrabold tracking-tight">Processing Workflow Action...</p>
+             <p className="text-slate-900 font-extrabold tracking-tight">Syncing Workflow Sequence...</p>
            </div>
         </div>
       )}
@@ -194,7 +197,7 @@ export const EntityList: React.FC<EntityListProps> = ({
           <button onClick={() => navigate('/')} className="p-2.5 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-500 transition-all shrink-0"><ArrowLeft className="w-5 h-5" /></button>
           <div className="min-w-0">
             <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 truncate tracking-tight">{title}</h1>
-            <p className="text-slate-500 text-[11px] font-bold uppercase tracking-widest mt-1">Sales & Operations Pipeline</p>
+            <p className="text-slate-500 text-[11px] font-bold uppercase tracking-widest mt-1">Operational Flow Pipeline</p>
           </div>
         </div>
         {!isReadOnly && (
@@ -204,7 +207,7 @@ export const EntityList: React.FC<EntityListProps> = ({
 
       <div className="relative group">
         <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400"><Search className="h-5 w-5" /></div>
-        <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="block w-full pl-12 pr-4 py-3.5 bg-white border border-slate-200 rounded-2xl text-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all shadow-sm" placeholder={`Filter ${data.length} items...`} />
+        <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="block w-full pl-12 pr-4 py-3.5 bg-white border border-slate-200 rounded-2xl text-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all shadow-sm" placeholder={`Filter ${data.length} records...`} />
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
@@ -222,15 +225,20 @@ export const EntityList: React.FC<EntityListProps> = ({
                   {columns.map((col) => col.type !== 'items' && <td key={col.key} className="px-6 py-4 text-sm font-semibold text-slate-700">{renderCell(item[col.key], col.type, col.key)}</td>)}
                   <td className="px-6 py-4 text-right whitespace-nowrap sticky right-0 bg-white group-hover:bg-slate-50/50 transition-all">
                     <div className="flex justify-end gap-1.5">
-                      {/* Workflow Actions */}
-                      {!isReadOnly && currentPath === EntityType.SALES_QUOTES && (
+                      {/* Smart Workflow Visibility */}
+                      {!isReadOnly && currentPath === EntityType.SALES_QUOTES && (item.status === 'Sent' || item.status === 'Accepted') && (
                           <button onClick={() => handleConvert(item.id, EntityType.SALES_ORDERS)} title="Convert to Order" className="p-2 text-indigo-500 hover:bg-indigo-50 rounded-lg"><FileCheck className="w-4.5 h-4.5" /></button>
                       )}
-                      {!isReadOnly && currentPath === EntityType.SALES_ORDERS && (
+                      {!isReadOnly && currentPath === EntityType.SALES_ORDERS && (item.status === 'Confirmed') && (
                           <>
-                            <button onClick={() => handleConvert(item.id, EntityType.DELIVERY_NOTES)} title="Generate Delivery Note" className="p-2 text-amber-500 hover:bg-amber-50 rounded-lg"><Truck className="w-4.5 h-4.5" /></button>
+                            <button onClick={() => handleConvert(item.id, EntityType.DELIVERY_NOTES)} title="Generate Note" className="p-2 text-amber-500 hover:bg-amber-50 rounded-lg"><Truck className="w-4.5 h-4.5" /></button>
                             <button onClick={() => handleConvert(item.id, EntityType.SALES_INVOICES)} title="Generate Invoice" className="p-2 text-indigo-500 hover:bg-indigo-50 rounded-lg"><Receipt className="w-4.5 h-4.5" /></button>
                           </>
+                      )}
+                      
+                      {/* Payment Trigger */}
+                      {!isReadOnly && currentPath === EntityType.SALES_INVOICES && item.status !== 'Paid' && (
+                          <button onClick={() => setPaymentItem(item)} title="Receive Payment" className="p-2 text-emerald-500 hover:bg-emerald-50 rounded-lg"><Wallet className="w-4.5 h-4.5" /></button>
                       )}
                       
                       <button onClick={() => setViewingItem(item)} className="p-2 text-slate-400 hover:text-indigo-600 rounded-lg"><Eye className="w-4.5 h-4.5" /></button>
@@ -250,18 +258,18 @@ export const EntityList: React.FC<EntityListProps> = ({
         </div>
       </div>
 
-      <Modal isOpen={!!viewingItem} onClose={() => setViewingItem(null)} title="Audit Trail & Logistics">
+      <Modal isOpen={!!viewingItem} onClose={() => setViewingItem(null)} title="Record Audit & Data Chain">
         {viewingItem && <div className="space-y-6">
             <div className="bg-indigo-50 p-4 rounded-2xl border border-indigo-100">
-                <p className="text-[10px] text-indigo-400 font-black uppercase mb-1">Traceability Ref</p>
+                <p className="text-[10px] text-indigo-400 font-black uppercase mb-1">System Reference</p>
                 <p className="text-lg font-black text-indigo-900">{viewingItem.docRef || viewingItem.id}</p>
                 {viewingItem.sourceRef && (
-                    <p className="text-xs text-indigo-600 mt-2 flex items-center"><ArrowRightLeft className="w-3 h-3 mr-2" /> {viewingItem.sourceRef}</p>
+                    <p className="text-xs text-indigo-600 mt-2 flex items-center font-bold italic"><ArrowRightLeft className="w-3 h-3 mr-2" /> {viewingItem.sourceRef}</p>
                 )}
             </div>
             <div className="grid grid-cols-2 gap-4">
                 {columns.filter(c => c.type !== 'items' && c.key !== 'id').map(c => (
-                    <div key={c.key} className="p-4 border border-slate-100 rounded-2xl">
+                    <div key={c.key} className="p-4 border border-slate-100 rounded-2xl bg-white">
                         <p className="text-[10px] text-slate-400 font-black uppercase mb-1">{c.label}</p>
                         <p className="text-sm font-bold text-slate-800">{renderCell(viewingItem[c.key], c.type, c.key)}</p>
                     </div>
