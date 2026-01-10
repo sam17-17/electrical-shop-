@@ -4,12 +4,12 @@ import { useAuth } from '../context/AuthContext';
 import { 
   Download, Upload, Trash2, Database, Save, ArrowLeft, 
   Terminal, Copy, Check, Cloud, CloudOff, Info, AlertTriangle, ChevronRight,
-  Share2, ArrowUpCircle, Zap, RefreshCw, Radio
+  Share2, ArrowUpCircle, Zap, RefreshCw, Radio, LifeBuoy
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export const Settings: React.FC = () => {
-  const { data, importData, lastSync } = useData();
+  const { data, importData, lastSync, restoreFromLocal } = useData();
   const { isDemoMode } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
@@ -25,8 +25,10 @@ CREATE TABLE IF NOT EXISTS public.crm_entities (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- 2. TYPE FIX
+-- 2. CRITICAL TYPE FIX FOR UUID ERRORS
+-- Force both 'id' and 'user_id' to be TEXT to support legacy IDs and Virtual Admins
 ALTER TABLE public.crm_entities ALTER COLUMN id TYPE TEXT USING id::text;
+ALTER TABLE public.crm_entities ALTER COLUMN user_id TYPE TEXT USING user_id::text;
 
 -- 3. SHARED TEAM ACCESS (RLS)
 ALTER TABLE public.crm_entities ENABLE ROW LEVEL SECURITY;
@@ -47,49 +49,30 @@ END $$;`;
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleExport = () => {
-    const dataStr = JSON.stringify(data, null, 2);
-    const blob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `zill_crm_backup_${new Date().toISOString().split('T')[0]}.json`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  const handleImportTrigger = () => fileInputRef.current?.click();
-
-  const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const json = JSON.parse(event.target?.result as string);
-        if (window.confirm('Overwrite current data?')) {
-            importData(json, true);
-            alert('Global upgrade signal sent!');
-        }
-      } catch (error) {
-        alert('Failed to parse JSON.');
-      }
-    };
-    reader.readAsText(file);
-    e.target.value = '';
-  };
-
   const handleSyncToCloud = async () => {
     if (isDemoMode) return alert("Demo accounts cannot sync.");
     setIsMigrating(true);
     try {
       await importData(data, true);
-      alert("Cloud Sync & Global Upgrade Broadcast Successful.");
+      alert("Cloud Sync Successful.");
     } catch (e: any) {
       alert(`Sync failed: ${e.message}`);
     } finally {
       setIsMigrating(false);
+    }
+  };
+
+  const handleForceRecovery = async () => {
+    if (window.confirm("This will push your currently visible data to the cloud, overwriting the cloud state with your local cache. Proceed?")) {
+        setIsMigrating(true);
+        try {
+            await restoreFromLocal();
+            alert("Recovery Successful: Cloud table repopulated.");
+        } catch(e: any) {
+            alert("Recovery failed: " + e.message);
+        } finally {
+            setIsMigrating(false);
+        }
     }
   };
 
@@ -113,7 +96,7 @@ END $$;`;
                         <Radio className={`w-6 h-6 ${isDemoMode ? 'text-amber-600' : 'text-indigo-600'} animate-pulse`} />
                     </div>
                     <div>
-                        <h2 className="text-lg font-bold text-slate-800 tracking-tight">Global Sync</h2>
+                        <h2 className="text-lg font-bold text-slate-800 tracking-tight">Cloud Link</h2>
                         <p className={`text-[10px] font-black uppercase tracking-widest ${isDemoMode ? 'text-amber-700' : 'text-indigo-700'}`}>
                           {isDemoMode ? 'Offline Mode' : 'Connected to Cloud Pool'}
                         </p>
@@ -122,39 +105,28 @@ END $$;`;
 
                 {!isDemoMode && (
                     <div className="space-y-4">
-                      <div className="text-[10px] text-indigo-500 font-bold uppercase tracking-widest">
-                        Last Global Update: {lastSync ? lastSync.toLocaleTimeString() : 'N/A'}
-                      </div>
                       <button 
                         onClick={handleSyncToCloud} 
                         disabled={isMigrating} 
                         className="w-full flex items-center justify-center py-3 bg-indigo-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all active:scale-[0.98]"
                       >
                         {isMigrating ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Zap className="w-4 h-4 mr-2" />} 
-                        Push Upgrade Globally
+                        Push Sync to Cloud
                       </button>
+
+                      <button 
+                        onClick={handleForceRecovery}
+                        disabled={isMigrating}
+                        className="w-full flex items-center justify-center py-3 bg-amber-500 text-white rounded-xl text-sm font-bold shadow-lg shadow-amber-100 hover:bg-amber-600 transition-all active:scale-[0.98]"
+                      >
+                         <LifeBuoy className="w-4 h-4 mr-2" /> Force Data Recovery
+                      </button>
+
                       <p className="text-[10px] text-slate-500 leading-relaxed italic text-center">
-                        This will notify all logged-in accounts to instantly refresh their state with the latest changes.
+                        Use "Force Data Recovery" if your cloud table is empty but your local records are present.
                       </p>
                     </div>
                 )}
-            </div>
-
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                <h3 className="font-bold text-slate-800 mb-4 flex items-center text-xs uppercase tracking-widest">
-                    <Database className="w-4 h-4 mr-2 text-slate-400" /> Maintenance
-                </h3>
-                <div className="space-y-2">
-                    <button onClick={handleExport} className="w-full flex items-center justify-between px-4 py-3 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-50">
-                        <span className="flex items-center"><Download className="w-4 h-4 mr-3 text-indigo-500" /> Export System State</span>
-                        <ChevronRight className="w-3 h-3 text-slate-300" />
-                    </button>
-                    <input type="file" ref={fileInputRef} onChange={handleImportFile} accept=".json" className="hidden" />
-                    <button onClick={handleImportTrigger} className="w-full flex items-center justify-between px-4 py-3 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-50">
-                        <span className="flex items-center"><Upload className="w-4 h-4 mr-3 text-indigo-500" /> Restore System State</span>
-                        <ChevronRight className="w-3 h-3 text-slate-300" />
-                    </button>
-                </div>
             </div>
         </div>
 

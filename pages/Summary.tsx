@@ -7,7 +7,7 @@ import {
 import { 
   DollarSign, TrendingUp, Users, Package, ArrowUpRight, ArrowDownRight, 
   PlusCircle, FileText, ShoppingBag, AlertTriangle, Clock, ChevronRight,
-  Wallet, Receipt, Lock
+  Wallet, Receipt, Lock, RefreshCw, Zap, ShieldAlert
 } from 'lucide-react';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
@@ -60,7 +60,6 @@ const KPICard = ({ title, value, subValue, icon: Icon, colorClass, trend, restri
 );
 
 const ActivityItem = ({ type, title, amount, date, status }: any) => {
-    const isPositive = type === 'payment' || type === 'invoice';
     return (
         <div className="flex items-center justify-between p-3 hover:bg-slate-50 rounded-lg transition-colors border-b border-slate-50 last:border-0">
             <div className="flex items-center space-x-3 min-w-0">
@@ -84,15 +83,26 @@ const ActivityItem = ({ type, title, amount, date, status }: any) => {
     )
 }
 
-// --- MAIN SUMMARY PAGE ---
-
 export const Summary: React.FC = () => {
-  const { data } = useData();
+  const { data, isRecovering, restoreFromLocal } = useData();
   const { user } = useAuth();
   const navigate = useNavigate();
   const [timeRange, setTimeRange] = useState('This Month');
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const isAdmin = (user?.user_metadata?.role || user?.role) === 'Admin';
+
+  const handleRestore = async () => {
+     setIsSyncing(true);
+     try {
+        await restoreFromLocal();
+        alert("Success: Cloud data synchronized with local cache.");
+     } catch(e: any) {
+        alert("Error: " + e.message);
+     } finally {
+        setIsSyncing(false);
+     }
+  };
 
   // --- DATA CALCULATIONS ---
   const metrics = useMemo(() => {
@@ -153,25 +163,38 @@ export const Summary: React.FC = () => {
     const lowStock = inventory.filter(item => Number(item.stock) < 10);
 
     return {
-        cashOnHand,
-        receivables,
-        revenue,
-        chartData: Array.from(chartMap.values()),
-        pipeline,
-        recent,
-        lowStock
+        cashOnHand, receivables, revenue, chartData: Array.from(chartMap.values()), pipeline, recent, lowStock
     };
   }, [data]);
 
   const currencyFormatter = new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' });
 
-  const handleQuickCreate = (type: EntityType) => {
-    navigate(`/${type}`);
-  };
-
   return (
     <div className="space-y-6 sm:space-y-8 animate-fade-in pb-10 max-w-[1600px] mx-auto">
       
+      {/* RECOVERY BANNER */}
+      {isRecovering && (
+        <div className="bg-gradient-to-r from-amber-600 to-amber-700 p-4 sm:p-6 rounded-2xl shadow-xl shadow-amber-100 flex flex-col sm:flex-row items-center justify-between gap-4 animate-bounce-soft border border-amber-500/20">
+            <div className="flex items-center gap-4 text-white">
+                <div className="p-3 bg-white/20 rounded-xl">
+                    <ShieldAlert className="w-6 h-6" />
+                </div>
+                <div>
+                    <h3 className="font-bold text-lg leading-tight">Disappeared Data Found!</h3>
+                    <p className="text-amber-100 text-sm opacity-90">We've detected your missing records in the local browser cache.</p>
+                </div>
+            </div>
+            <button 
+                onClick={handleRestore}
+                disabled={isSyncing}
+                className="w-full sm:w-auto px-6 py-3 bg-white text-amber-700 font-black rounded-xl text-sm shadow-lg hover:scale-[1.02] transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
+            >
+                {isSyncing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+                {isSyncing ? 'Synchronizing...' : 'Restore All Data to Cloud Now'}
+            </button>
+        </div>
+      )}
+
       {/* HEADER SECTION */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
@@ -184,9 +207,7 @@ export const Summary: React.FC = () => {
                     key={range}
                     onClick={() => setTimeRange(range)}
                     className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${
-                        timeRange === range 
-                        ? 'bg-indigo-600 text-white shadow-md' 
-                        : 'text-slate-500 hover:bg-slate-50'
+                        timeRange === range ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'
                     }`}
                 >
                     {range}
@@ -195,75 +216,14 @@ export const Summary: React.FC = () => {
         </div>
       </div>
 
-      {/* QUICK ACTIONS BAR */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
-         <QuickActionBtn 
-            icon={FileText} 
-            label="New Invoice" 
-            color="bg-indigo-500" 
-            onClick={() => handleQuickCreate(EntityType.SALES_INVOICES)} 
-         />
-         <QuickActionBtn 
-            icon={ShoppingBag} 
-            label="New Quote" 
-            color="bg-blue-500" 
-            onClick={() => handleQuickCreate(EntityType.SALES_QUOTES)} 
-         />
-         <QuickActionBtn 
-            icon={Users} 
-            label="Add Customer" 
-            color="bg-emerald-500" 
-            onClick={() => handleQuickCreate(EntityType.CUSTOMERS)} 
-         />
-         <QuickActionBtn 
-            icon={Package} 
-            label="Add Product" 
-            color="bg-amber-500" 
-            onClick={() => handleQuickCreate(EntityType.INVENTORY)} 
-         />
-         <div className="hidden lg:flex flex-col justify-center items-start px-6 bg-white/50 border border-slate-100 rounded-2xl">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Network Status</p>
-            <div className="flex items-center space-x-2">
-                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0"></div>
-                <span className="text-xs font-bold text-slate-700">Real-time Sync Active</span>
-            </div>
-         </div>
-      </div>
-
       {/* KPI CARDS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-        <KPICard 
-          title="Cash on Hand" 
-          value={currencyFormatter.format(metrics.cashOnHand)} 
-          subValue={isAdmin ? "Total liquid assets" : "Access Restricted"}
-          icon={Wallet}
-          colorClass="bg-emerald-600"
-          trend={2.5}
-          restricted={!isAdmin}
-        />
-        <KPICard 
-          title="Accounts Receivable" 
-          value={currencyFormatter.format(metrics.receivables)} 
-          subValue={isAdmin ? "Unpaid invoice pool" : "Access Restricted"}
-          icon={Clock}
-          colorClass="bg-amber-500"
-          trend={-1.2}
-          restricted={!isAdmin}
-        />
-        <KPICard 
-          title="Net Revenue (YTD)" 
-          value={currencyFormatter.format(metrics.revenue)} 
-          subValue={isAdmin ? "Total collected funds" : "Access Restricted"}
-          icon={TrendingUp}
-          colorClass="bg-indigo-600"
-          trend={12.8}
-          restricted={!isAdmin}
-        />
+        <KPICard title="Cash on Hand" value={currencyFormatter.format(metrics.cashOnHand)} subValue={isAdmin ? "Total liquid assets" : "Access Restricted"} icon={Wallet} colorClass="bg-emerald-600" trend={2.5} restricted={!isAdmin} />
+        <KPICard title="Accounts Receivable" value={currencyFormatter.format(metrics.receivables)} subValue={isAdmin ? "Unpaid invoice pool" : "Access Restricted"} icon={Clock} colorClass="bg-amber-500" trend={-1.2} restricted={!isAdmin} />
+        <KPICard title="Net Revenue (YTD)" value={currencyFormatter.format(metrics.revenue)} subValue={isAdmin ? "Total collected funds" : "Access Restricted"} icon={TrendingUp} colorClass="bg-indigo-600" trend={12.8} restricted={!isAdmin} />
       </div>
 
-      {/* MAIN CHART AREA & ACTIVITY FEED */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        {/* FINANCIAL CHART */}
         <div className="xl:col-span-2 bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col min-h-[350px] sm:min-h-[400px]">
             {isAdmin ? (
                 <>
@@ -289,9 +249,7 @@ export const Summary: React.FC = () => {
                                 <CartesianGrid vertical={false} stroke="#f1f5f9" strokeDasharray="3 3" />
                                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 600 }} dy={10} />
                                 <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 600 }} />
-                                <Tooltip 
-                                    contentStyle={{ backgroundColor: '#fff', borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '12px' }}
-                                />
+                                <Tooltip contentStyle={{ backgroundColor: '#fff', borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '12px' }} />
                                 <Area type="monotone" dataKey="income" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#colorIncome)" />
                                 <Bar dataKey="expense" barSize={14} fill="#fb7185" radius={[4, 4, 0, 0]} />
                             </ComposedChart>
@@ -304,14 +262,11 @@ export const Summary: React.FC = () => {
                         <Lock className="w-8 h-8 text-slate-300" />
                     </div>
                     <h3 className="font-extrabold text-slate-800 text-lg tracking-tight">Protected Financial View</h3>
-                    <p className="text-slate-500 max-w-xs mt-2 text-sm">
-                        Trend analysis and detailed cash flow reporting are restricted to system administrators.
-                    </p>
+                    <p className="text-slate-500 max-w-xs mt-2 text-sm">Trend analysis and detailed cash flow reporting are restricted to system administrators.</p>
                 </div>
             )}
         </div>
 
-        {/* RECENT ACTIVITY */}
         <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col overflow-hidden h-[400px]">
             <div className="flex justify-between items-center mb-4">
                 <div>
@@ -330,126 +285,11 @@ export const Summary: React.FC = () => {
                     </div>
                 ) : (
                     metrics.recent.map((item: GenericEntity) => (
-                        <ActivityItem 
-                            key={item.id}
-                            type="invoice"
-                            title={item.customer}
-                            amount={currencyFormatter.format(item.amount)}
-                            date={new Date(item.date).toLocaleDateString()}
-                            status={item.status}
-                        />
+                        <ActivityItem key={item.id} type="invoice" title={item.customer} amount={currencyFormatter.format(item.amount)} date={new Date(item.date).toLocaleDateString()} status={item.status} />
                     ))
                 )}
             </div>
         </div>
-      </div>
-
-      {/* BOTTOM METRICS */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          
-          {/* PIPELINE CHART */}
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-              <h3 className="font-extrabold text-slate-800 text-lg tracking-tight mb-1">Sales Pipeline</h3>
-              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-6">Quote Lifecycle Distribution</p>
-              
-              <div className="h-[220px] flex items-center justify-center relative">
-                  {metrics.pipeline.length === 0 ? (
-                      <div className="text-slate-300 text-sm flex flex-col items-center">
-                        <FileText className="w-8 h-8 mb-2 opacity-20" />
-                        <p>No active quotes in pipeline</p>
-                      </div>
-                  ) : (
-                    <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                            <Pie
-                                data={metrics.pipeline}
-                                cx="50%"
-                                cy="50%"
-                                innerRadius={70}
-                                outerRadius={90}
-                                paddingAngle={8}
-                                dataKey="value"
-                            >
-                                {metrics.pipeline.map((entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />
-                                ))}
-                            </Pie>
-                            <Tooltip />
-                            <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: '11px', fontWeight: 600 }} />
-                        </PieChart>
-                    </ResponsiveContainer>
-                  )}
-                  {metrics.pipeline.length > 0 && (
-                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none mb-9">
-                        <div className="text-center">
-                            <span className="text-3xl font-black text-slate-800 leading-none block">
-                                {metrics.pipeline.reduce((a, b) => a + b.value, 0)}
-                            </span>
-                            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">TOTAL</span>
-                        </div>
-                     </div>
-                  )}
-              </div>
-          </div>
-
-          {/* INVENTORY ALERTS */}
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 md:col-span-2">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
-                  <div className="flex items-center">
-                      <div className="p-2.5 bg-amber-100 rounded-xl mr-3 text-amber-600 shadow-sm shadow-amber-100">
-                          <AlertTriangle className="w-5 h-5" />
-                      </div>
-                      <div>
-                          <h3 className="font-extrabold text-slate-800 text-lg tracking-tight">Critical Stock Warnings</h3>
-                          <p className="text-slate-500 text-xs">Items requiring immediate reordering (&lt;10 units)</p>
-                      </div>
-                  </div>
-                  <Link to="/inventory" className="text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors uppercase tracking-widest bg-indigo-50 px-3 py-1.5 rounded-lg self-start sm:self-auto">
-                    Manage Stock
-                  </Link>
-              </div>
-
-              {metrics.lowStock.length === 0 ? (
-                  <div className="flex items-center justify-center h-[160px] bg-emerald-50 rounded-2xl border border-emerald-100 border-dashed">
-                      <div className="text-center p-4">
-                          <Package className="w-10 h-10 text-emerald-300 mx-auto mb-2" />
-                          <p className="text-emerald-800 font-bold text-sm tracking-tight">All inventory levels optimal</p>
-                          <p className="text-emerald-600 text-xs mt-1">No low stock items detected currently</p>
-                      </div>
-                  </div>
-              ) : (
-                  <div className="overflow-x-auto no-scrollbar rounded-xl border border-slate-100">
-                      <table className="w-full text-left text-sm">
-                          <thead className="bg-slate-50/50 text-slate-400 font-bold text-[10px] uppercase tracking-widest border-b border-slate-100">
-                              <tr>
-                                  <th className="px-4 py-3">Product Description</th>
-                                  <th className="px-4 py-3">Reference SKU</th>
-                                  <th className="px-4 py-3 text-center">Qty</th>
-                                  <th className="px-4 py-3 text-right">Action</th>
-                              </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-50">
-                              {metrics.lowStock.map((item: any) => (
-                                  <tr key={item.id} className="hover:bg-slate-50/50 transition-colors group">
-                                      <td className="px-4 py-3 font-bold text-slate-700">{item.name}</td>
-                                      <td className="px-4 py-3 text-slate-500 font-mono text-xs">{item.code}</td>
-                                      <td className="px-4 py-3 text-center">
-                                          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-black bg-red-100 text-red-700">
-                                              {item.stock}
-                                          </span>
-                                      </td>
-                                      <td className="px-4 py-3 text-right">
-                                          <button className="text-[10px] font-black text-amber-600 uppercase tracking-tighter bg-amber-50 px-2 py-1 rounded hover:bg-amber-100 transition-colors">
-                                              Restock
-                                          </button>
-                                      </td>
-                                  </tr>
-                              ))}
-                          </tbody>
-                      </table>
-                  </div>
-              )}
-          </div>
       </div>
     </div>
   );

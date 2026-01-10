@@ -3,13 +3,13 @@ import { EntityType, EntityState, GenericEntity } from '../types';
 import { getSupabase } from '../services/supabase';
 import { useAuth } from './AuthContext';
 
-// Current Application Version - increment this to force global refreshes
-const APP_VERSION = '2.1.0';
+const APP_VERSION = '2.2.0';
 
 interface DataContextType {
   data: EntityState;
   loading: boolean;
   dbNeedsSetup: boolean;
+  isRecovering: boolean;
   lastSync: Date | null;
   addEntity: (type: EntityType, entity: Omit<GenericEntity, 'id'>) => Promise<void>;
   updateEntity: (type: EntityType, id: string, entity: Partial<GenericEntity>) => Promise<void>;
@@ -17,6 +17,7 @@ interface DataContextType {
   getEntity: (type: EntityType, id: string) => GenericEntity | undefined;
   importData: (newData: EntityState, isUpgrade?: boolean) => Promise<void>;
   receivePayment: (invoiceId: string, amount: number, bankAccountId: string, date: string, reference: string) => Promise<void>;
+  restoreFromLocal: () => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -42,6 +43,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [data, setData] = useState<EntityState>(INITIAL_STATE);
   const [loading, setLoading] = useState(true);
   const [dbNeedsSetup, setDbNeedsSetup] = useState(false);
+  const [isRecovering, setIsRecovering] = useState(false);
   const [lastSync, setLastSync] = useState<Date | null>(null);
   
   const isFetching = useRef(false);
@@ -54,14 +56,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         const parsed = JSON.parse(saved);
         const merged = { ...INITIAL_STATE, ...parsed };
-        setData(merged);
         return merged;
       } catch (e) {
-        setData(INITIAL_STATE);
         return INITIAL_STATE;
       }
     }
-    setData(INITIAL_STATE);
     return INITIAL_STATE;
   }, []);
 
@@ -72,6 +71,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const fetchData = useCallback(async (force = false) => {
     if (isFetching.current && !force) return;
     
+    const local = loadLocalData();
+
     if (!isAuthenticated && !localStorage.getItem('zill_active_user')) {
       setData(INITIAL_STATE);
       setLoading(false);
@@ -79,7 +80,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     if (isDemoMode) {
-      loadLocalData();
+      setData(local);
       setLoading(false);
       return;
     }
@@ -94,39 +95,43 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (error) {
           if (error.message.includes("Could not find the table") || error.code === 'PGRST116') {
             setDbNeedsSetup(true);
-            loadLocalData();
-          } else {
-            loadLocalData();
           }
+          setData(local);
         } else {
           setDbNeedsSetup(false);
-          const groupedData = { ...INITIAL_STATE };
-          (dbData as any[])?.forEach((row) => {
-            const type = row.type as EntityType;
-            if (groupedData[type]) {
-              groupedData[type].push({ ...row.content, id: row.id });
-            }
-          });
           
-          setData(groupedData);
-          saveLocalData(groupedData);
-          setLastSync(new Date());
-
-          if (Array.isArray(dbData) && dbData.length === 0 && !autoSyncDone.current) {
-            const localData = loadLocalData();
-            if (Object.values(localData).some((arr: any) => arr.length > 0)) {
-              await importData(localData);
+          // Added explicit type cast to any[] to fix 'Property length does not exist on type unknown' error
+          if (Array.isArray(dbData) && (dbData as any[]).length === 0) {
+            // HEARTBEAT CHECK: If cloud is empty but local has data, trigger recovery mode
+            const hasLocalData = Object.values(local).some(arr => arr.length > 0);
+            if (hasLocalData && !autoSyncDone.current) {
+               setIsRecovering(true);
+               setData(local);
+            } else {
+               setData(INITIAL_STATE);
             }
+          } else {
+            setIsRecovering(false);
+            const groupedData = { ...INITIAL_STATE };
+            (dbData as any[])?.forEach((row) => {
+              const type = row.type as EntityType;
+              if (groupedData[type]) {
+                groupedData[type].push({ ...row.content, id: row.id });
+              }
+            });
+            setData(groupedData);
+            saveLocalData(groupedData);
+            setLastSync(new Date());
           }
           autoSyncDone.current = true;
         }
       } catch (e) {
-        loadLocalData();
+        setData(local);
       } finally {
         isFetching.current = false;
       }
     } else {
-      loadLocalData();
+      setData(local);
     }
     setLoading(false);
   }, [isAuthenticated, supabase, isDemoMode, loadLocalData]);
@@ -135,51 +140,34 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     fetchData();
   }, [fetchData]);
 
-  // GLOBAL BROADCAST LISTENER
   useEffect(() => {
     if (isDemoMode || !supabase || !isAuthenticated) return;
-
     const channel = supabase.channel('global-sync-channel');
-
     channel
-      .on('broadcast', { event: 'app-upgrade' }, (payload) => {
-        console.log('Global Sync: App Upgrade Signal Received', payload);
-        fetchData(true); // Force refresh all users
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_entities' }, () => {
-        fetchData(true);
-      })
+      .on('broadcast', { event: 'app-upgrade' }, () => fetchData(true))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_entities' }, () => fetchData(true))
       .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, [supabase, isDemoMode, isAuthenticated, fetchData]);
 
   const addEntity = async (type: EntityType, entity: Omit<GenericEntity, 'id'>) => {
     const id = (entity as any).id || generateUUID();
     const newEntity = { ...entity, id };
-
     const oldState = data;
     const newState = { ...data, [type]: [...data[type], newEntity] };
     setData(newState);
     saveLocalData(newState);
 
     if (isDemoMode || !supabase || dbNeedsSetup) return;
-    if (!user?.id) throw new Error("Session invalid.");
-
     const content = { ...entity };
     delete (content as any).id;
 
     const { error } = await supabase
       .from('crm_entities')
-      .upsert([{ id, type, content, user_id: user.id }], { onConflict: 'id' });
+      .upsert([{ id, type, content, user_id: user?.id }], { onConflict: 'id' });
 
     if (error) {
       setData(oldState);
-      if (error.message.includes("invalid input syntax for type uuid")) {
-        throw new Error("Database Error: 'id' column mismatch. Go to Settings and run the SQL fix.");
-      }
       throw new Error(error.message);
     }
   };
@@ -188,7 +176,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const currentItems = data[type];
     const target = currentItems.find(i => i.id === id);
     if (!target) return;
-
     const updatedEntity = { ...target, ...entity };
     const oldState = data;
     const newState = { ...data, [type]: currentItems.map(item => item.id === id ? updatedEntity : item) };
@@ -196,7 +183,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     saveLocalData(newState);
 
     if (isDemoMode || !supabase || dbNeedsSetup) return;
-    
     const content = { ...updatedEntity };
     delete content.id;
 
@@ -204,10 +190,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .from('crm_entities')
       .upsert({ id, type, content, user_id: user?.id }, { onConflict: 'id' });
 
-    if (error) {
-      setData(oldState); 
-      throw new Error(error.message);
-    }
+    if (error) { setData(oldState); throw new Error(error.message); }
   };
 
   const deleteEntity = async (type: EntityType, id: string) => {
@@ -215,20 +198,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const newState = { ...data, [type]: data[type].filter(i => i.id !== id) };
     setData(newState);
     saveLocalData(newState);
-
     if (isDemoMode || !supabase || dbNeedsSetup) return;
-
     const { error } = await supabase.from('crm_entities').delete().eq('id', id);
-    if (error) {
-      setData(oldState); 
-      throw new Error(error.message);
-    }
+    if (error) { setData(oldState); throw new Error(error.message); }
   };
 
   const importData = async (newData: EntityState, isUpgrade = false) => {
     setData(newData);
     saveLocalData(newData);
-
     if (isDemoMode || !supabase || dbNeedsSetup) return;
 
     try {
@@ -243,50 +220,49 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (allRows.length > 0) {
-        await supabase.from('crm_entities').delete().neq('type', 'system-users');
+        // SAFETY FIX: Use UPSERT instead of DELETE + INSERT to prevent data voids
         const chunkSize = 50;
         for (let i = 0; i < allRows.length; i += chunkSize) {
-          const { error } = await supabase.from('crm_entities').insert(allRows.slice(i, i + chunkSize));
+          const { error } = await supabase.from('crm_entities').upsert(allRows.slice(i, i + chunkSize), { onConflict: 'id' });
           if (error) throw error;
         }
 
-        // Send Global Upgrade Signal
         if (isUpgrade) {
           await supabase.channel('global-sync-channel').send({
             type: 'broadcast',
             event: 'app-upgrade',
-            payload: { version: APP_VERSION, sender: user?.id, timestamp: Date.now() }
+            payload: { version: APP_VERSION, timestamp: Date.now() }
           });
         }
       }
-    } catch (e: any) {
-      throw e;
-    }
+      setIsRecovering(false);
+    } catch (e: any) { throw e; }
+  };
+
+  const restoreFromLocal = async () => {
+    const local = loadLocalData();
+    await importData(local, true);
+    setIsRecovering(false);
   };
 
   const receivePayment = async (invoiceId: string, amount: number, bankAccountId: string, date: string, reference: string) => {
     const invoice = data[EntityType.SALES_INVOICES].find(i => i.id === invoiceId);
     const bank = data[EntityType.BANK_CASH].find(i => i.id === bankAccountId);
     if (!invoice) return;
-
     const newAmountPaid = Number(invoice.amountPaid || 0) + amount;
     const newStatus = newAmountPaid >= invoice.amount ? 'Paid' : 'Unpaid';
-
     await updateEntity(EntityType.SALES_INVOICES, invoiceId, { amountPaid: newAmountPaid, status: newStatus });
     await addEntity(EntityType.SALES_ORDERS, {
       customer: invoice.customer, phone: invoice.phone, date, amount, status: 'Confirmed', items: invoice.items,
       description: `Payment via ${reference}. Linked to Inv ${invoiceId}.`
     });
-
-    if (bank) {
-      await updateEntity(EntityType.BANK_CASH, bankAccountId, { balance: Number(bank.balance || 0) + amount });
-    }
+    if (bank) await updateEntity(EntityType.BANK_CASH, bankAccountId, { balance: Number(bank.balance || 0) + amount });
   };
 
   const getEntity = (type: EntityType, id: string) => data[type]?.find((item) => item.id === id);
 
   return (
-    <DataContext.Provider value={{ data, loading, dbNeedsSetup, lastSync, addEntity, updateEntity, deleteEntity, getEntity, importData, receivePayment }}>
+    <DataContext.Provider value={{ data, loading, dbNeedsSetup, isRecovering, lastSync, addEntity, updateEntity, deleteEntity, getEntity, importData, receivePayment, restoreFromLocal }}>
       {children}
     </DataContext.Provider>
   );
