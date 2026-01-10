@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { DataColumn, GenericEntity, LineItem, EntityType } from '../types';
-import { Plus, Trash2, RefreshCw, Key, Loader2 } from 'lucide-react';
+import { Plus, Trash2, RefreshCw, Key, Loader2, AlertCircle } from 'lucide-react';
 import { useData } from '../context/DataContext';
 
 interface EntityFormProps {
@@ -25,6 +25,7 @@ const generateUUID = () => {
 export const EntityForm: React.FC<EntityFormProps> = ({ columns, initialData, onSubmit, onCancel, entityType }) => {
   const [formData, setFormData] = useState<any>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const { data } = useData();
 
   const inventoryItems = useMemo(() => data[EntityType.INVENTORY] || [], [data]);
@@ -73,6 +74,7 @@ export const EntityForm: React.FC<EntityFormProps> = ({ columns, initialData, on
   }, [initialData, columns, entityType, data]);
 
   const handleChange = (key: string, value: any, column?: DataColumn) => {
+    setError(null);
     setFormData((prev: any) => {
         const newData = { ...prev, [key]: value };
         if (column?.sourceType) {
@@ -150,16 +152,25 @@ export const EntityForm: React.FC<EntityFormProps> = ({ columns, initialData, on
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmitting) return;
+    setError(null);
     setIsSubmitting(true);
     try {
         await onSubmit(formData);
-    } finally {
+    } catch (err: any) {
+        setError(err.message || "An unexpected error occurred.");
         setIsSubmitting(false);
     }
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl flex items-start text-xs font-bold animate-fade-in mb-2">
+            <AlertCircle className="w-4 h-4 mr-2 shrink-0 mt-0.5" />
+            <span>{error}</span>
+        </div>
+      )}
+
       {columns.map((col) => {
         if (col.type === 'readonly') {
              const displayValue = (col.key === 'id' && formData['docRef']) ? formData['docRef'] : (formData[col.key] || '');

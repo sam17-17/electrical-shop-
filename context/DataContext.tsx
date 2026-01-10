@@ -3,7 +3,7 @@ import { EntityType, EntityState, GenericEntity } from '../types';
 import { getSupabase } from '../services/supabase';
 import { useAuth } from './AuthContext';
 
-const APP_VERSION = '2.3.0';
+const APP_VERSION = '2.4.0';
 
 interface DataContextType {
   data: EntityState;
@@ -134,12 +134,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(false);
   }, [isAuthenticated, supabase, isDemoMode, loadLocalData]);
 
-  // Debounced refetch to handle rapid bursts of DB changes (e.g. bulk inserts)
+  /**
+   * INCREASE REFRESH RATE:
+   * Reduced debounce from 1000ms to 200ms for snappier real-time experience.
+   */
   const debouncedFetch = useCallback(() => {
     if (syncTimeoutRef.current) window.clearTimeout(syncTimeoutRef.current);
     syncTimeoutRef.current = window.setTimeout(() => {
       fetchData(true);
-    }, 1000);
+    }, 200);
   }, [fetchData]);
 
   useEffect(() => {
@@ -162,10 +165,23 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const addEntity = async (type: EntityType, entity: Omit<GenericEntity, 'id'>) => {
     const id = (entity as any).id || generateUUID();
     
-    // Stop Double Entry: Check if ID already exists in local state
+    // 1. Technical Duplicate Protection (ID)
     if (data[type].some(item => item.id === id)) {
-        console.warn('Duplicate entity addition blocked locally:', id);
+        console.warn('Technical Duplicate Blocked:', id);
         return;
+    }
+
+    // 2. Business Duplicate Protection (Name/Email) for Customers and Suppliers
+    if (type === EntityType.CUSTOMERS || type === EntityType.SUPPLIERS) {
+        const nameMatch = data[type].some(item => 
+            item.name?.toString().toLowerCase().trim() === (entity as any).name?.toString().toLowerCase().trim()
+        );
+        const emailMatch = (entity as any).email && data[type].some(item => 
+            item.email?.toString().toLowerCase().trim() === (entity as any).email?.toString().toLowerCase().trim()
+        );
+
+        if (nameMatch) throw new Error(`A ${type.slice(0, -1)} with this name already exists.`);
+        if (emailMatch) throw new Error(`A ${type.slice(0, -1)} with this email already exists.`);
     }
 
     const newEntity = { ...entity, id };
@@ -186,7 +202,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (error) {
       setData(oldState);
       if (error.message.includes("foreign key constraint")) {
-        throw new Error("Cloud Sync Failed: Incompatible database constraint. Go to Settings and run the UPDATED SQL script.");
+        throw new Error("Cloud Sync Failed: Incompatible database constraint. Go to Settings and run the SQL script.");
       }
       throw new Error(error.message);
     }
