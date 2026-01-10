@@ -24,6 +24,19 @@ const INITIAL_STATE: EntityState = Object.values(EntityType).reduce((acc, type) 
 
 const LOCAL_STORAGE_KEY = 'zill_crm_local_data';
 
+// Helper to generate a valid UUID v4
+const generateUUID = () => {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  // Fallback for older environments
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+};
+
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, isAuthenticated, isDemoMode } = useAuth();
   const [data, setData] = useState<EntityState>(INITIAL_STATE);
@@ -34,7 +47,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const autoSyncDone = useRef(false);
   const supabase = getSupabase();
 
-  // Load data from local storage as a fallback or for Demo mode
   const loadLocalData = useCallback(() => {
     const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (saved) {
@@ -58,7 +70,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const fetchData = useCallback(async (force = false) => {
-    // Prevent overlapping fetches which cause duplication in UI state
     if (isFetching.current && !force) return;
     
     if (!isAuthenticated && !localStorage.getItem('zill_active_user')) {
@@ -94,7 +105,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           (dbData as any[])?.forEach((row) => {
             const type = row.type as EntityType;
             if (groupedData[type]) {
-              // Ensure we don't duplicate if for some reason the DB has same IDs
               const exists = groupedData[type].some(item => item.id === row.id);
               if (!exists) {
                 groupedData[type].push({ ...row.content, id: row.id });
@@ -105,7 +115,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setData(groupedData);
           saveLocalData(groupedData);
 
-          // Auto-sync local to cloud if cloud is empty on first load
           if (Array.isArray(dbData) && dbData.length === 0 && !autoSyncDone.current) {
             const localData = loadLocalData();
             const hasLocalContent = Object.values(localData).some((arr: any) => arr.length > 0);
@@ -131,7 +140,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     fetchData();
   }, [fetchData]);
 
-  // Realtime subscription with a small debounce to handle bulk updates
   useEffect(() => {
     if (isDemoMode || !supabase || !isAuthenticated || dbNeedsSetup) return;
 
@@ -142,7 +150,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         'postgres_changes',
         { event: '*', schema: 'public', table: 'crm_entities' },
         () => {
-          // Debounce fetch to prevent storm of requests during bulk operations
           clearTimeout(timeoutId);
           timeoutId = setTimeout(() => fetchData(true), 200);
         }
@@ -156,10 +163,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [supabase, isDemoMode, isAuthenticated, fetchData, dbNeedsSetup]);
 
   const addEntity = async (type: EntityType, entity: Omit<GenericEntity, 'id'>) => {
-    const id = (entity as any).id || Math.random().toString(36).substr(2, 9);
+    // CRITICAL: Ensure we generate a valid UUID if one isn't provided
+    // This fixes the "invalid input syntax for type uuid" error
+    const id = (entity as any).id || generateUUID();
     const newEntity = { ...entity, id };
 
-    // Optimistic local update
     const oldState = data;
     const newState = { ...data, [type]: [...data[type], newEntity] };
     setData(newState);
@@ -172,7 +180,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const content = { ...entity };
     delete (content as any).id;
 
-    // Use upsert to prevent duplication if a race condition occurs
     const { error } = await supabase
       .from('crm_entities')
       .upsert([{ id, type, content, user_id: user.id }], { onConflict: 'id' });
@@ -183,6 +190,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else if (error.message.includes("row-level security policy")) {
         setData(oldState);
         throw new Error("Security Policy Violation: Go to Settings and update your SQL Schema to allow 'public' access.");
+      } else if (error.message.includes("invalid input syntax for type uuid")) {
+        setData(oldState);
+        throw new Error("Database Type Mismatch: Your 'id' column is typed as UUID but received a plain string. Run the migration script in Settings.");
       } else {
         setData(oldState); 
         throw new Error(error.message);
@@ -212,10 +222,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .upsert({ id, type, content, user_id: user?.id }, { onConflict: 'id' });
 
     if (error) {
-      if (error.message.includes("row-level security policy")) {
-        setData(oldState);
-        throw new Error("Security Policy Violation: Your Cloud DB is blocking updates. Re-run the SQL script in Settings.");
-      }
       setData(oldState); 
       throw new Error(error.message);
     }
@@ -235,10 +241,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .eq('id', id);
 
     if (error) {
-      if (error.message.includes("row-level security policy")) {
-        setData(oldState);
-        throw new Error("Security Policy Violation: Deletions are being blocked by Cloud RLS.");
-      }
       setData(oldState); 
       throw new Error(error.message);
     }
@@ -252,7 +254,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const newAmountPaid = Number(invoice.amountPaid || 0) + amount;
     const newStatus = newAmountPaid >= invoice.amount ? 'Paid' : 'Unpaid';
 
-    // Atomic updates across entities
     await updateEntity(EntityType.SALES_INVOICES, invoiceId, {
       amountPaid: newAmountPaid,
       status: newStatus
@@ -280,19 +281,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const importData = async (newData: EntityState) => {
-    // Replace local state immediately
     setData(newData);
     saveLocalData(newData);
 
     if (isDemoMode || !supabase || dbNeedsSetup) return;
 
     try {
-      // 1. Prepare all rows for a single bulk upsert (more reliable than a loop)
       const allRows: any[] = [];
       for (const [type, items] of Object.entries(newData)) {
         items.forEach(item => {
           const content = { ...item };
-          const rowId = content.id || Math.random().toString(36).substr(2, 9);
+          const rowId = content.id || generateUUID();
           delete content.id;
           allRows.push({
             id: rowId,
@@ -304,11 +303,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (allRows.length > 0) {
-        // Use a single bulk delete and insert or just a massive upsert
-        // For import, we delete old non-system data first to ensure clean state
         await supabase.from('crm_entities').delete().neq('type', 'system-users');
-        
-        // Chunk inserts if extremely large
         const chunkSize = 50;
         for (let i = 0; i < allRows.length; i += chunkSize) {
           const chunk = allRows.slice(i, i + chunkSize);

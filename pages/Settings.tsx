@@ -26,20 +26,22 @@ CREATE TABLE IF NOT EXISTS public.crm_entities (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- 2. ENABLE ROW LEVEL SECURITY
+-- 2. FIX FOR "invalid input syntax for type uuid"
+-- Run this if your table already exists and uses UUID for the ID column.
+-- This converts it to TEXT so human-friendly IDs like 'INV-1001' can be saved.
+ALTER TABLE public.crm_entities ALTER COLUMN id SET DATA TYPE TEXT;
+
+-- 3. ENABLE ROW LEVEL SECURITY
 ALTER TABLE public.crm_entities ENABLE ROW LEVEL SECURITY;
 
--- 3. CREATE ACCESS POLICIES
--- We use 'public' instead of 'authenticated' because Virtual Users (PIN login) 
--- are technically anonymous to Supabase Auth, but part of our CRM's auth logic.
+-- 4. CREATE ACCESS POLICIES
 DROP POLICY IF EXISTS "Shared team access" ON public.crm_entities;
 CREATE POLICY "Shared team access" ON public.crm_entities 
 FOR ALL TO public 
 USING (true) 
 WITH CHECK (true);
 
--- 4. ENABLE REALTIME SAFELY
--- This block checks if the table is already in the publication to avoid errors.
+-- 5. ENABLE REALTIME SAFELY
 DO $$
 BEGIN
     IF NOT EXISTS (
@@ -180,10 +182,11 @@ $$;`;
                 <div className="mt-4 p-4 bg-amber-50 rounded-xl border border-amber-200 flex items-start">
                     <AlertTriangle className="w-5 h-5 text-amber-600 mr-3 shrink-0 mt-0.5" />
                     <div>
-                        <p className="text-xs font-bold text-amber-800">Important Fix for RLS Errors</p>
+                        <p className="text-xs font-bold text-amber-800">Critical Fix for UUID Errors</p>
                         <p className="text-[11px] text-amber-700 mt-1">
-                            If you see "row-level security policy" errors, ensure your policy is set to <b>TO public</b>. 
-                            Our CRM uses a hybrid auth model where PIN-users are technically anonymous to Supabase.
+                            If you see "invalid input syntax for type uuid", your database table was likely created with a UUID column. 
+                            The updated script above includes an <b>ALTER TABLE</b> command to convert it to <b>TEXT</b>. 
+                            This allows you to save both system-generated UUIDs and human-readable IDs.
                         </p>
                     </div>
                 </div>

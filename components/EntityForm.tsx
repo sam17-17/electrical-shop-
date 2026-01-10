@@ -11,21 +11,36 @@ interface EntityFormProps {
   entityType?: EntityType;
 }
 
+// Helper to generate a valid UUID v4
+const generateUUID = () => {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+};
+
 export const EntityForm: React.FC<EntityFormProps> = ({ columns, initialData, onSubmit, onCancel, entityType }) => {
   const [formData, setFormData] = useState<any>({});
   const { data } = useData();
 
-  // Inventory list for auto-complete/select in Line Items
   const inventoryItems = useMemo(() => data[EntityType.INVENTORY] || [], [data]);
 
   useEffect(() => {
     if (initialData) {
       setFormData(initialData);
     } else {
-      // Initialize defaults
       const defaults: any = {};
       
-      // Auto-Generate ID for specific types if it's a new record
+      // We always generate a UUID for the database primary key
+      defaults['id'] = generateUUID();
+
+      // For human-readable IDs, we populate the 'reference' or 'id' property in content
+      // Note: If the column in DB is UUID, 'INV-1001' as ID will fail. 
+      // We prefer using UUIDs for 'id' and a custom field for the label.
       if (entityType) {
          if ([EntityType.SALES_INVOICES, EntityType.SALES_QUOTES, EntityType.SALES_ORDERS, EntityType.DELIVERY_NOTES, EntityType.PURCHASE_ORDERS, EntityType.PURCHASE_QUOTES].includes(entityType)) {
              const prefixMap: Record<string, string> = {
@@ -40,11 +55,16 @@ export const EntityForm: React.FC<EntityFormProps> = ({ columns, initialData, on
              const prefix = prefixMap[entityType] || 'DOC-';
              const existing = data[entityType] || [];
              const count = existing.length + 1001;
-             defaults['id'] = `${prefix}${count}`;
+             
+             // We'll store the human readable ID in a separate field called 'docRef' 
+             // so the primary 'id' can remain a safe UUID.
+             defaults['docRef'] = `${prefix}${count}`;
          }
       }
 
       columns.forEach(col => {
+        if (col.key === 'id') return; // Skip primary key, handled above
+        
         if (col.type === 'status' && col.options && col.options.length > 0) {
           defaults[col.key] = col.options[0];
         } else if (col.type === 'date') {
@@ -54,8 +74,7 @@ export const EntityForm: React.FC<EntityFormProps> = ({ columns, initialData, on
         } else if (col.type === 'currency' && col.key === 'amount') {
             defaults[col.key] = 0;
         } else {
-            // Preserve ID if we set it above
-            if (col.key !== 'id') defaults[col.key] = '';
+            defaults[col.key] = '';
         }
       });
       setFormData(prev => ({...defaults, ...prev}));
@@ -66,7 +85,6 @@ export const EntityForm: React.FC<EntityFormProps> = ({ columns, initialData, on
     setFormData((prev: any) => {
         const newData = { ...prev, [key]: value };
 
-        // Auto-fill logic for Source Types (e.g. Selecting a Customer autofills Phone)
         if (column?.sourceType) {
             const sourceList = data[column.sourceType] || [];
             const match = sourceList.find((item: any) => item.name === value);
@@ -91,10 +109,9 @@ export const EntityForm: React.FC<EntityFormProps> = ({ columns, initialData, on
     handleChange('pin', pin);
   };
 
-  // --- LINE ITEM LOGIC ---
   const handleAddItem = () => {
     const newItem: LineItem = {
-      id: Math.random().toString(36).substr(2, 9),
+      id: generateUUID(),
       description: '',
       quantity: 1,
       unitPrice: 0,
@@ -139,7 +156,7 @@ export const EntityForm: React.FC<EntityFormProps> = ({ columns, initialData, on
 
   const updateGrandTotal = (items: LineItem[]) => {
       const subTotal = items.reduce((sum, item) => sum + item.total, 0);
-      const vat = subTotal * 0.18; // 18% VAT
+      const vat = subTotal * 0.18; 
       const total = subTotal + vat;
       setFormData((prev: any) => ({ ...prev, amount: total }));
   };
@@ -153,12 +170,14 @@ export const EntityForm: React.FC<EntityFormProps> = ({ columns, initialData, on
     <form onSubmit={handleSubmit} className="space-y-4">
       {columns.map((col) => {
         if (col.type === 'readonly') {
+             // If we have a custom human-readable ID, show that instead of the raw UUID
+             const displayValue = (col.key === 'id' && formData['docRef']) ? formData['docRef'] : (formData[col.key] || '');
              return (
                 <div key={col.key} className="flex flex-col space-y-1.5">
                     <label className="text-sm font-medium text-slate-700">{col.label}</label>
                     <input 
                         type="text" 
-                        value={formData[col.key] || ''} 
+                        value={displayValue} 
                         disabled 
                         className="w-full px-3 py-2 bg-slate-100 border border-slate-300 rounded-lg text-slate-500 text-sm"
                     />
