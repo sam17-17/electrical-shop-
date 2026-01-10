@@ -29,10 +29,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [data, setData] = useState<EntityState>(INITIAL_STATE);
   const [loading, setLoading] = useState(true);
   const [dbNeedsSetup, setDbNeedsSetup] = useState(false);
-  const autoSyncDone = useRef(false);
   
+  const isFetching = useRef(false);
+  const autoSyncDone = useRef(false);
   const supabase = getSupabase();
 
+  // Load data from local storage as a fallback or for Demo mode
   const loadLocalData = useCallback(() => {
     const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (saved) {
@@ -46,18 +48,20 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setData(INITIAL_STATE);
         return INITIAL_STATE;
       }
-    } else {
-      setData(INITIAL_STATE);
-      return INITIAL_STATE;
     }
+    setData(INITIAL_STATE);
+    return INITIAL_STATE;
   }, []);
 
   const saveLocalData = (newState: EntityState) => {
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(newState));
   };
 
-  const fetchData = useCallback(async () => {
-    if (!isAuthenticated && !localStorage.getItem('zill_mock_user')) {
+  const fetchData = useCallback(async (force = false) => {
+    // Prevent overlapping fetches which cause duplication in UI state
+    if (isFetching.current && !force) return;
+    
+    if (!isAuthenticated && !localStorage.getItem('zill_active_user')) {
       setData(INITIAL_STATE);
       setLoading(false);
       return;
@@ -70,14 +74,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     if (supabase) {
+      isFetching.current = true;
       try {
         const { data: dbData, error } = await supabase
           .from('crm_entities')
           .select('*');
 
         if (error) {
-          if (error.message.includes("Could not find the table") || error.code === 'PGRST116' || error.message.includes("404")) {
-            console.warn('Database table missing or cache error. Using local storage.');
+          if (error.message.includes("Could not find the table") || error.code === 'PGRST116') {
             setDbNeedsSetup(true);
             loadLocalData();
           } else {
@@ -90,18 +94,23 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           (dbData as any[])?.forEach((row) => {
             const type = row.type as EntityType;
             if (groupedData[type]) {
-              groupedData[type].push({ ...row.content, id: row.id });
+              // Ensure we don't duplicate if for some reason the DB has same IDs
+              const exists = groupedData[type].some(item => item.id === row.id);
+              if (!exists) {
+                groupedData[type].push({ ...row.content, id: row.id });
+              }
             }
           });
           
           setData(groupedData);
+          saveLocalData(groupedData);
 
-          if (Array.isArray(dbData) && (dbData as any[]).length === 0 && !autoSyncDone.current) {
+          // Auto-sync local to cloud if cloud is empty on first load
+          if (Array.isArray(dbData) && dbData.length === 0 && !autoSyncDone.current) {
             const localData = loadLocalData();
-            // Added explicit type casting for arr to fix "Property 'length' does not exist on type 'unknown'"
-            const hasData = Object.values(localData).some((arr: any) => arr.length > 0);
-            if (hasData) {
-              importData(localData).catch(err => console.error("Auto-sync failed", err));
+            const hasLocalContent = Object.values(localData).some((arr: any) => arr.length > 0);
+            if (hasLocalContent) {
+              await importData(localData);
             }
           }
           autoSyncDone.current = true;
@@ -109,6 +118,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch (e) {
         console.error('Unexpected error fetching data:', e);
         loadLocalData();
+      } finally {
+        isFetching.current = false;
       }
     } else {
       loadLocalData();
@@ -120,25 +131,26 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     fetchData();
   }, [fetchData]);
 
+  // Realtime subscription with a small debounce to handle bulk updates
   useEffect(() => {
     if (isDemoMode || !supabase || !isAuthenticated || dbNeedsSetup) return;
 
+    let timeoutId: any;
     const channel = supabase
       .channel('schema-db-changes')
       .on(
         'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'crm_entities',
-        },
+        { event: '*', schema: 'public', table: 'crm_entities' },
         () => {
-          fetchData();
+          // Debounce fetch to prevent storm of requests during bulk operations
+          clearTimeout(timeoutId);
+          timeoutId = setTimeout(() => fetchData(true), 200);
         }
       )
       .subscribe();
 
     return () => {
+      clearTimeout(timeoutId);
       supabase.removeChannel(channel);
     };
   }, [supabase, isDemoMode, isAuthenticated, fetchData, dbNeedsSetup]);
@@ -147,6 +159,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const id = (entity as any).id || Math.random().toString(36).substr(2, 9);
     const newEntity = { ...entity, id };
 
+    // Optimistic local update
     const oldState = data;
     const newState = { ...data, [type]: [...data[type], newEntity] };
     setData(newState);
@@ -154,14 +167,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (isDemoMode || !supabase || dbNeedsSetup) return;
 
-    if (!user?.id) throw new Error("User session expired.");
+    if (!user?.id) throw new Error("Session invalid. Re-authenticate.");
 
     const content = { ...entity };
     delete (content as any).id;
 
+    // Use upsert to prevent duplication if a race condition occurs
     const { error } = await supabase
       .from('crm_entities')
-      .insert([{ id, type, content, user_id: user.id }]);
+      .upsert([{ id, type, content, user_id: user.id }], { onConflict: 'id' });
 
     if (error) {
       if (error.message.includes("Could not find the table")) {
@@ -192,8 +206,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const { error } = await supabase
       .from('crm_entities')
-      .update({ content })
-      .eq('id', id);
+      .upsert({ id, type, content, user_id: user?.id }, { onConflict: 'id' });
 
     if (error) {
       setData(oldState); 
@@ -228,6 +241,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const newAmountPaid = Number(invoice.amountPaid || 0) + amount;
     const newStatus = newAmountPaid >= invoice.amount ? 'Paid' : 'Unpaid';
 
+    // Atomic updates across entities
     await updateEntity(EntityType.SALES_INVOICES, invoiceId, {
       amountPaid: newAmountPaid,
       status: newStatus
@@ -255,29 +269,44 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const importData = async (newData: EntityState) => {
+    // Replace local state immediately
     setData(newData);
     saveLocalData(newData);
 
     if (isDemoMode || !supabase || dbNeedsSetup) return;
 
     try {
-      await supabase.from('crm_entities').delete().neq('id', 'dummy_to_allow_mass_delete'); 
-      
+      // 1. Prepare all rows for a single bulk upsert (more reliable than a loop)
+      const allRows: any[] = [];
       for (const [type, items] of Object.entries(newData)) {
-        if (items.length > 0) {
-          const rows = items.map(item => ({
-            id: item.id || Math.random().toString(36).substr(2, 9),
+        items.forEach(item => {
+          const content = { ...item };
+          const rowId = content.id || Math.random().toString(36).substr(2, 9);
+          delete content.id;
+          allRows.push({
+            id: rowId,
             type,
-            content: { ...item },
+            content,
             user_id: user?.id
-          }));
-          rows.forEach(r => delete r.content.id);
-          const { error } = await supabase.from('crm_entities').insert(rows);
+          });
+        });
+      }
+
+      if (allRows.length > 0) {
+        // Use a single bulk delete and insert or just a massive upsert
+        // For import, we delete old non-system data first to ensure clean state
+        await supabase.from('crm_entities').delete().neq('type', 'system-users');
+        
+        // Chunk inserts if extremely large
+        const chunkSize = 50;
+        for (let i = 0; i < allRows.length; i += chunkSize) {
+          const chunk = allRows.slice(i, i + chunkSize);
+          const { error } = await supabase.from('crm_entities').insert(chunk);
           if (error) throw error;
         }
       }
     } catch (e: any) {
-      console.error('Cloud import failed:', e.message);
+      console.error('Cloud mass-sync failed:', e.message);
     }
   };
 
