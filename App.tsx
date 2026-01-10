@@ -5,7 +5,7 @@ import {
   Briefcase, Receipt, Layers, Folder, UserCheck, BookOpen, 
   PieChart, Settings as SettingsIcon, Menu, X, ChevronRight,
   ClipboardList, StickyNote, LogOut, Database, Cloud, CloudOff, ShieldCheck,
-  AlertTriangle, ArrowRight
+  AlertTriangle, ArrowRight, RefreshCw, Zap
 } from 'lucide-react';
 import { EntityType, NavItem, DataColumn } from './types';
 import { Summary } from './pages/Summary';
@@ -149,7 +149,7 @@ const NAV_ITEMS: NavItem[] = [
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth >= 1024);
   const location = useLocation();
-  const { data, dbNeedsSetup } = useData();
+  const { data, lastSync } = useData();
   const { user, logout, isDemoMode } = useAuth();
 
   useEffect(() => {
@@ -162,11 +162,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   }, []);
   
   const userRole = user?.user_metadata?.role || user?.role;
-
-  const filteredNavItems = NAV_ITEMS.filter(item => {
-    if (!item.allowedRoles) return true;
-    return item.allowedRoles.includes(userRole);
-  });
+  const filteredNavItems = NAV_ITEMS.filter(item => !item.allowedRoles || item.allowedRoles.includes(userRole));
 
   const groupedNav = filteredNavItems.reduce((acc, item) => {
     const key = item.group || 'Main';
@@ -175,25 +171,11 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     return acc;
   }, {} as Record<string, NavItem[]>);
 
-  const currentPath = location.pathname.substring(1) || EntityType.SUMMARY;
-  const currentPathKey = currentPath as EntityType;
-  const currentData = data[currentPathKey] || [];
-  const contextString = JSON.stringify(currentData.slice(0, 20), null, 2);
+  const contextString = JSON.stringify(data[location.pathname.substring(1) as EntityType] || [], null, 2);
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden relative">
-      {sidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-20 lg:hidden transition-opacity" 
-          onClick={() => setSidebarOpen(false)} 
-        />
-      )}
-
-      <aside 
-        className={`${
-          sidebarOpen ? 'w-64 translate-x-0' : 'w-0 -translate-x-full lg:w-20 lg:translate-x-0'
-        } bg-slate-900 text-slate-300 transition-all duration-300 flex flex-col fixed lg:relative z-30 h-full border-r border-slate-800 shadow-xl overflow-hidden`}
-      >
+      <aside className={`${sidebarOpen ? 'w-64 translate-x-0' : 'w-0 -translate-x-full lg:w-20 lg:translate-x-0'} bg-slate-900 text-slate-300 transition-all duration-300 flex flex-col fixed lg:relative z-30 h-full border-r border-slate-800 shadow-xl overflow-hidden`}>
         <div className="h-16 flex items-center justify-between px-4 border-b border-slate-800 shrink-0">
           <div className={`font-bold text-white text-xl flex items-center space-x-2 ${!sidebarOpen && 'lg:hidden'}`}>
              <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shrink-0">
@@ -201,63 +183,37 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
              </div>
              <span className="truncate">ZILL</span>
           </div>
-          <button onClick={() => setSidebarOpen(false)} className="lg:hidden p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 transition-colors">
-            <X className="w-5 h-5" />
-          </button>
+          <button onClick={() => setSidebarOpen(false)} className="lg:hidden p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 transition-colors"><X className="w-5 h-5" /></button>
         </div>
-
         <nav className="flex-1 overflow-y-auto py-4 scrollbar-hide">
           {Object.entries(groupedNav).map(([group, items]) => (
             <div key={group} className="mb-6">
-              {sidebarOpen && group !== 'Main' && (
-                <h3 className="px-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 truncate">
-                  {group}
-                </h3>
-              )}
+              {sidebarOpen && group !== 'Main' && <h3 className="px-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 truncate">{group}</h3>}
               <ul>
-                {items.map((item) => {
-                  const count = data[item.id]?.length || 0;
-                  return (
-                    <li key={item.id}>
-                      <NavLink
-                        to={`/${item.id === EntityType.SUMMARY ? '' : item.id}`}
-                        onClick={() => window.innerWidth < 1024 && setSidebarOpen(false)}
-                        className={({ isActive }) => `flex items-center px-4 py-2.5 transition-all relative group ${
-                          isActive ? 'bg-indigo-600 text-white' : 'hover:bg-slate-800 hover:text-white text-slate-400'
-                        } ${!sidebarOpen ? 'justify-center' : ''}`}
-                      >
-                        <item.icon className={`w-5 h-5 shrink-0 ${sidebarOpen ? 'mr-3' : ''}`} />
-                        {sidebarOpen && <span className="text-sm font-medium truncate">{item.label}</span>}
-                        {sidebarOpen && count > 0 && (
-                          <span className="ml-auto text-[10px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded-full font-bold">
-                            {count}
-                          </span>
-                        )}
-                      </NavLink>
-                    </li>
-                  );
-                })}
+                {items.map((item) => (
+                  <li key={item.id}>
+                    <NavLink to={`/${item.id === EntityType.SUMMARY ? '' : item.id}`} onClick={() => window.innerWidth < 1024 && setSidebarOpen(false)} className={({ isActive }) => `flex items-center px-4 py-2.5 transition-all relative group ${isActive ? 'bg-indigo-600 text-white' : 'hover:bg-slate-800 hover:text-white text-slate-400'} ${!sidebarOpen ? 'justify-center' : ''}`}>
+                      <item.icon className={`w-5 h-5 shrink-0 ${sidebarOpen ? 'mr-3' : ''}`} />
+                      {sidebarOpen && <span className="text-sm font-medium truncate">{item.label}</span>}
+                    </NavLink>
+                  </li>
+                ))}
               </ul>
             </div>
           ))}
         </nav>
-        
         <div className="border-t border-slate-800 shrink-0 p-2">
            <div className="flex items-center justify-between">
               <div className={`flex-1 flex items-center p-2 rounded-lg cursor-default min-w-0 ${!sidebarOpen ? 'justify-center' : ''}`}>
-                <img src={`https://ui-avatars.com/api/?name=${user?.email || 'User'}&background=64748b&color=fff`} className="w-8 h-8 rounded-full bg-slate-700 shrink-0" alt="" />
+                <img src={`https://ui-avatars.com/api/?name=${user?.username || 'User'}&background=6366f1&color=fff`} className="w-8 h-8 rounded-full bg-slate-700 shrink-0" alt="" />
                 {sidebarOpen && (
                   <div className="ml-3 text-left min-w-0 overflow-hidden">
-                    <p className="text-sm font-semibold text-slate-300 truncate">{user?.username || 'User'}</p>
+                    <p className="text-sm font-semibold text-slate-300 truncate">{user?.username}</p>
                     <p className="text-[10px] text-slate-500 uppercase truncate">{userRole}</p>
                   </div>
                 )}
               </div>
-              {sidebarOpen && (
-                <button onClick={logout} className="p-2 rounded-lg hover:bg-red-500/10 text-slate-500 hover:text-red-500 transition-colors">
-                  <LogOut className="w-5 h-5" />
-                </button>
-              )}
+              {sidebarOpen && <button onClick={logout} className="p-2 rounded-lg hover:bg-red-500/10 text-slate-500 hover:text-red-500 transition-colors"><LogOut className="w-5 h-5" /></button>}
            </div>
         </div>
       </aside>
@@ -269,17 +225,25 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
               <Menu className="w-5 h-5" />
             </button>
              <div className="flex items-center text-sm text-slate-500 overflow-hidden">
-              <span className="hidden sm:inline">ZILL</span>
-              <ChevronRight className="w-4 h-4 mx-1 sm:mx-2 shrink-0 hidden sm:inline" />
-              <span className="font-semibold text-slate-800 capitalize truncate">
-                {location.pathname === '/' ? 'Summary' : location.pathname.substring(1).replace('-', ' ')}
-              </span>
+              <span className="hidden sm:inline">ZILL CRM</span>
+              <ChevronRight className="w-4 h-4 mx-2 hidden sm:inline" />
+              <span className="font-semibold text-slate-800 capitalize truncate">{location.pathname === '/' ? 'Summary' : location.pathname.substring(1).replace('-', ' ')}</span>
              </div>
+          </div>
+          <div className="flex items-center space-x-3">
+             {!isDemoMode && (
+               <div className="hidden md:flex items-center px-3 py-1.5 bg-indigo-50 border border-indigo-100 rounded-full animate-pulse">
+                  <Zap className="w-3 h-3 text-indigo-600 mr-2" />
+                  <span className="text-[10px] font-black text-indigo-700 uppercase tracking-tighter">
+                    Last Synced: {lastSync ? lastSync.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'Syncing...'}
+                  </span>
+               </div>
+             )}
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-0 scroll-smooth flex flex-col min-w-0">
-          <div className="flex-1 p-4 sm:p-6 min-w-0">{children}</div>
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 scroll-smooth flex flex-col min-w-0">
+          {children}
         </main>
       </div>
       <AiAssistant currentPageData={contextString} />
@@ -294,36 +258,16 @@ const AppContent: React.FC = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [activeType, setActiveType] = useState<EntityType | null>(null);
 
-  if (authLoading || dataLoading) {
-    return (
-      <div className="h-screen w-full flex flex-col items-center justify-center bg-slate-50">
-        <div className="w-16 h-16 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin"></div>
-        <p className="text-slate-600 font-bold mt-6 tracking-tight">ZILL CRM</p>
-      </div>
-    );
-  }
+  if (authLoading || dataLoading) return (
+    <div className="h-screen w-full flex flex-col items-center justify-center bg-slate-50">
+      <div className="w-16 h-16 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin"></div>
+      <p className="text-slate-600 font-black mt-6 tracking-widest text-xs uppercase">Initialising Sync Engine</p>
+    </div>
+  );
 
   if (!isAuthenticated) return <Login />;
 
   const userRole = user?.user_metadata?.role || user?.role;
-
-  const handleAdd = (type: EntityType) => {
-    setActiveType(type);
-    setEditingId(null);
-    setModalOpen(true);
-  };
-
-  const handleEdit = (type: EntityType, id: string) => {
-    setActiveType(type);
-    setEditingId(id);
-    setModalOpen(true);
-  };
-
-  const handleDelete = (type: EntityType, id: string) => {
-    if (window.confirm('Are you sure you want to delete this item?')) {
-      deleteEntity(type, id);
-    }
-  };
 
   const handleFormSubmit = async (formData: any) => {
     if (!activeType) return;
@@ -331,9 +275,7 @@ const AppContent: React.FC = () => {
         if (editingId) await updateEntity(activeType, editingId, formData);
         else await addEntity(activeType, formData);
         setModalOpen(false);
-    } catch (e: any) {
-        alert(`Operation failed: ${e.message}`);
-    }
+    } catch (e: any) { alert(`Operation failed: ${e.message}`); }
   };
 
   return (
@@ -342,39 +284,22 @@ const AppContent: React.FC = () => {
         <Routes>
           <Route path="/" element={<Summary />} />
           <Route path="/settings" element={userRole === ROLES.ADMIN ? <Settings /> : <Navigate to="/" replace />} />
-          {NAV_ITEMS.filter(item => item.id !== EntityType.SUMMARY && item.id !== EntityType.SETTINGS).map((item) => {
-            const hasAccess = item.allowedRoles?.includes(userRole);
-            return (
-              <Route 
-                key={item.id} 
-                path={`/${item.id}`} 
-                element={
-                  hasAccess ? (
-                    <EntityList 
-                      title={item.label}
-                      columns={COLUMNS[item.id] || DEFAULT_COLUMNS}
-                      data={data[item.id] || []}
-                      onAdd={() => handleAdd(item.id)}
-                      onEdit={(id) => handleEdit(item.id, id)}
-                      onDelete={(id) => handleDelete(item.id, id)}
-                    />
-                  ) : (
-                    <Navigate to="/" replace />
-                  )
-                } 
-              />
-            );
-          })}
+          {NAV_ITEMS.filter(item => item.id !== EntityType.SUMMARY && item.id !== EntityType.SETTINGS).map((item) => (
+            <Route key={item.id} path={`/${item.id}`} element={
+              (!item.allowedRoles || item.allowedRoles.includes(userRole)) ? (
+                <EntityList title={item.label} columns={COLUMNS[item.id] || DEFAULT_COLUMNS} data={data[item.id] || []} 
+                  onAdd={() => { setActiveType(item.id); setEditingId(null); setModalOpen(true); }}
+                  onEdit={(id) => { setActiveType(item.id); setEditingId(id); setModalOpen(true); }}
+                  onDelete={(id) => { if(window.confirm('Delete this item?')) deleteEntity(item.id, id); }}
+                />
+              ) : <Navigate to="/" replace />
+            } />
+          ))}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={editingId ? `Update ${activeType}` : `Create ${activeType}`}>
-          <EntityForm 
-            columns={activeType ? (COLUMNS[activeType] || DEFAULT_COLUMNS) : []} 
-            initialData={(activeType && editingId) ? getEntity(activeType, editingId) : undefined} 
-            onSubmit={handleFormSubmit} 
-            onCancel={() => setModalOpen(false)} 
-            entityType={activeType || undefined} 
-          />
+          <EntityForm columns={activeType ? (COLUMNS[activeType] || DEFAULT_COLUMNS) : []} initialData={(activeType && editingId) ? getEntity(activeType, editingId) : undefined} 
+            onSubmit={handleFormSubmit} onCancel={() => setModalOpen(false)} entityType={activeType || undefined} />
         </Modal>
       </Layout>
     </Router>
