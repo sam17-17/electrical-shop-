@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { DataColumn, GenericEntity, LineItem, EntityType } from '../types';
-import { Plus, Trash2, RefreshCw, Key } from 'lucide-react';
+import { Plus, Trash2, RefreshCw, Key, Loader2 } from 'lucide-react';
 import { useData } from '../context/DataContext';
 
 interface EntityFormProps {
@@ -11,7 +11,6 @@ interface EntityFormProps {
   entityType?: EntityType;
 }
 
-// Helper to generate a valid UUID v4
 const generateUUID = () => {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
     return crypto.randomUUID();
@@ -25,6 +24,7 @@ const generateUUID = () => {
 
 export const EntityForm: React.FC<EntityFormProps> = ({ columns, initialData, onSubmit, onCancel, entityType }) => {
   const [formData, setFormData] = useState<any>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { data } = useData();
 
   const inventoryItems = useMemo(() => data[EntityType.INVENTORY] || [], [data]);
@@ -34,13 +34,8 @@ export const EntityForm: React.FC<EntityFormProps> = ({ columns, initialData, on
       setFormData(initialData);
     } else {
       const defaults: any = {};
-      
-      // We always generate a UUID for the database primary key
       defaults['id'] = generateUUID();
 
-      // For human-readable IDs, we populate the 'reference' or 'id' property in content
-      // Note: If the column in DB is UUID, 'INV-1001' as ID will fail. 
-      // We prefer using UUIDs for 'id' and a custom field for the label.
       if (entityType) {
          if ([EntityType.SALES_INVOICES, EntityType.SALES_QUOTES, EntityType.SALES_ORDERS, EntityType.DELIVERY_NOTES, EntityType.PURCHASE_ORDERS, EntityType.PURCHASE_QUOTES].includes(entityType)) {
              const prefixMap: Record<string, string> = {
@@ -55,16 +50,12 @@ export const EntityForm: React.FC<EntityFormProps> = ({ columns, initialData, on
              const prefix = prefixMap[entityType] || 'DOC-';
              const existing = data[entityType] || [];
              const count = existing.length + 1001;
-             
-             // We'll store the human readable ID in a separate field called 'docRef' 
-             // so the primary 'id' can remain a safe UUID.
              defaults['docRef'] = `${prefix}${count}`;
          }
       }
 
       columns.forEach(col => {
-        if (col.key === 'id') return; // Skip primary key, handled above
-        
+        if (col.key === 'id') return;
         if (col.type === 'status' && col.options && col.options.length > 0) {
           defaults[col.key] = col.options[0];
         } else if (col.type === 'date') {
@@ -79,16 +70,14 @@ export const EntityForm: React.FC<EntityFormProps> = ({ columns, initialData, on
       });
       setFormData(prev => ({...defaults, ...prev}));
     }
-  }, [initialData, columns, entityType]);
+  }, [initialData, columns, entityType, data]);
 
   const handleChange = (key: string, value: any, column?: DataColumn) => {
     setFormData((prev: any) => {
         const newData = { ...prev, [key]: value };
-
         if (column?.sourceType) {
             const sourceList = data[column.sourceType] || [];
             const match = sourceList.find((item: any) => item.name === value);
-            
             if (match) {
                 columns.forEach(targetCol => {
                     if (targetCol.key !== key && targetCol.key !== 'id' && targetCol.type !== 'items') {
@@ -99,7 +88,6 @@ export const EntityForm: React.FC<EntityFormProps> = ({ columns, initialData, on
                 });
             }
         }
-        
         return newData;
     });
   };
@@ -135,14 +123,12 @@ export const EntityForm: React.FC<EntityFormProps> = ({ columns, initialData, on
     const updatedItems = currentItems.map((item: LineItem) => {
       if (item.id === itemId) {
         let updatedItem = { ...item, [field]: value };
-        
         if (field === 'description') {
            const inventoryMatch = inventoryItems.find(inv => inv.name === value || inv.code === value);
            if (inventoryMatch) {
                updatedItem.unitPrice = Number(inventoryMatch.price);
            }
         }
-
         if (field === 'quantity' || field === 'unitPrice' || field === 'description') {
             updatedItem.total = Number(updatedItem.quantity) * Number(updatedItem.unitPrice);
         }
@@ -161,16 +147,21 @@ export const EntityForm: React.FC<EntityFormProps> = ({ columns, initialData, on
       setFormData((prev: any) => ({ ...prev, amount: total }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit(formData);
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+        await onSubmit(formData);
+    } finally {
+        setIsSubmitting(false);
+    }
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       {columns.map((col) => {
         if (col.type === 'readonly') {
-             // If we have a custom human-readable ID, show that instead of the raw UUID
              const displayValue = (col.key === 'id' && formData['docRef']) ? formData['docRef'] : (formData[col.key] || '');
              return (
                 <div key={col.key} className="flex flex-col space-y-1.5">
@@ -214,7 +205,7 @@ export const EntityForm: React.FC<EntityFormProps> = ({ columns, initialData, on
                                     <input 
                                         list="inventory-list"
                                         type="text" 
-                                        placeholder="Search or type item..."
+                                        placeholder="Search..."
                                         value={item.description}
                                         onChange={(e) => handleItemChange(item.id, 'description', e.target.value)}
                                         className="w-full px-2 py-1 bg-white border border-slate-200 rounded text-sm"
@@ -316,7 +307,6 @@ export const EntityForm: React.FC<EntityFormProps> = ({ columns, initialData, on
                     {col.sourceType && (data[col.sourceType] || []).map((entity: any) => (
                         <option key={entity.id} value={entity.name} />
                     ))}
-                    
                     {(!col.sourceType && col.options) && col.options.map((opt: string) => (
                         <option key={opt} value={opt} />
                     ))}
@@ -390,14 +380,17 @@ export const EntityForm: React.FC<EntityFormProps> = ({ columns, initialData, on
         <button
           type="button"
           onClick={onCancel}
-          className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors focus:outline-none focus:ring-2 focus:ring-slate-200"
+          disabled={isSubmitting}
+          className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors focus:outline-none focus:ring-2 focus:ring-slate-200 disabled:opacity-50"
         >
           Cancel
         </button>
         <button
           type="submit"
-          className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1"
+          disabled={isSubmitting}
+          className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 disabled:opacity-70 disabled:cursor-not-allowed flex items-center"
         >
+          {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
           {initialData ? 'Update' : 'Create'}
         </button>
       </div>

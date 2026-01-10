@@ -1,10 +1,9 @@
-
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { EntityType, EntityState, GenericEntity } from '../types';
 import { getSupabase } from '../services/supabase';
 import { useAuth } from './AuthContext';
 
-const APP_VERSION = '2.2.0';
+const APP_VERSION = '2.3.0';
 
 interface DataContextType {
   data: EntityState;
@@ -49,6 +48,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   
   const isFetching = useRef(false);
   const autoSyncDone = useRef(false);
+  const syncTimeoutRef = useRef<number | null>(null);
   const supabase = getSupabase();
 
   const loadLocalData = useCallback(() => {
@@ -56,8 +56,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        const merged = { ...INITIAL_STATE, ...parsed };
-        return merged;
+        return { ...INITIAL_STATE, ...parsed };
       } catch (e) {
         return INITIAL_STATE;
       }
@@ -102,7 +101,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setDbNeedsSetup(false);
           
           if (Array.isArray(dbData) && (dbData as any[]).length === 0) {
-            // Fix: Explicitly cast 'arr' to avoid type error where '.length' is missing on 'unknown'
             const hasLocalData = Object.values(local).some((arr: any) => arr.length > 0);
             if (hasLocalData && !autoSyncDone.current) {
                setIsRecovering(true);
@@ -136,6 +134,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(false);
   }, [isAuthenticated, supabase, isDemoMode, loadLocalData]);
 
+  // Debounced refetch to handle rapid bursts of DB changes (e.g. bulk inserts)
+  const debouncedFetch = useCallback(() => {
+    if (syncTimeoutRef.current) window.clearTimeout(syncTimeoutRef.current);
+    syncTimeoutRef.current = window.setTimeout(() => {
+      fetchData(true);
+    }, 1000);
+  }, [fetchData]);
+
   useEffect(() => {
     fetchData();
   }, [fetchData]);
@@ -144,17 +150,28 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (isDemoMode || !supabase || !isAuthenticated) return;
     const channel = supabase.channel('global-sync-channel');
     channel
-      .on('broadcast', { event: 'app-upgrade' }, () => fetchData(true))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_entities' }, () => fetchData(true))
+      .on('broadcast', { event: 'app-upgrade' }, () => debouncedFetch())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_entities' }, () => debouncedFetch())
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [supabase, isDemoMode, isAuthenticated, fetchData]);
+    return () => { 
+      supabase.removeChannel(channel); 
+      if (syncTimeoutRef.current) window.clearTimeout(syncTimeoutRef.current);
+    };
+  }, [supabase, isDemoMode, isAuthenticated, debouncedFetch]);
 
   const addEntity = async (type: EntityType, entity: Omit<GenericEntity, 'id'>) => {
     const id = (entity as any).id || generateUUID();
+    
+    // Stop Double Entry: Check if ID already exists in local state
+    if (data[type].some(item => item.id === id)) {
+        console.warn('Duplicate entity addition blocked locally:', id);
+        return;
+    }
+
     const newEntity = { ...entity, id };
     const oldState = data;
     const newState = { ...data, [type]: [...data[type], newEntity] };
+    
     setData(newState);
     saveLocalData(newState);
 
@@ -169,7 +186,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (error) {
       setData(oldState);
       if (error.message.includes("foreign key constraint")) {
-        throw new Error("Cloud Sync Failed: Incompatible database constraint. Go to Settings and run the UPDATED SQL script to remove the foreign key constraint.");
+        throw new Error("Cloud Sync Failed: Incompatible database constraint. Go to Settings and run the UPDATED SQL script.");
       }
       throw new Error(error.message);
     }
@@ -182,6 +199,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const updatedEntity = { ...target, ...entity };
     const oldState = data;
     const newState = { ...data, [type]: currentItems.map(item => item.id === id ? updatedEntity : item) };
+    
     setData(newState);
     saveLocalData(newState);
 
