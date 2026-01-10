@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { DataColumn, GenericEntity, LineItem, EntityType } from '../types';
 import { Plus, Trash2, RefreshCw, Key, Loader2, AlertCircle } from 'lucide-react';
@@ -154,8 +155,17 @@ export const EntityForm: React.FC<EntityFormProps> = ({ columns, initialData, on
     if (isSubmitting) return;
     setError(null);
     setIsSubmitting(true);
+    
+    // Auto-trim all string fields to help with duplicate detection
+    const cleanData = { ...formData };
+    Object.keys(cleanData).forEach(key => {
+      if (typeof cleanData[key] === 'string') {
+        cleanData[key] = cleanData[key].trim();
+      }
+    });
+
     try {
-        await onSubmit(formData);
+        await onSubmit(cleanData);
     } catch (err: any) {
         setError(err.message || "An unexpected error occurred.");
         setIsSubmitting(false);
