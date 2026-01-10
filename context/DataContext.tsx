@@ -163,8 +163,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [supabase, isDemoMode, isAuthenticated, fetchData, dbNeedsSetup]);
 
   const addEntity = async (type: EntityType, entity: Omit<GenericEntity, 'id'>) => {
-    // CRITICAL: Ensure we generate a valid UUID if one isn't provided
-    // This fixes the "invalid input syntax for type uuid" error
     const id = (entity as any).id || generateUUID();
     const newEntity = { ...entity, id };
 
@@ -192,7 +190,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error("Security Policy Violation: Go to Settings and update your SQL Schema to allow 'public' access.");
       } else if (error.message.includes("invalid input syntax for type uuid")) {
         setData(oldState);
-        throw new Error("Database Type Mismatch: Your 'id' column is typed as UUID but received a plain string. Run the migration script in Settings.");
+        throw new Error("Database Error: Your 'id' column is UUID, but the CRM needs it to be TEXT. Go to Settings, copy the SQL script, and run it in the Supabase SQL Editor to apply the fix.");
       } else {
         setData(oldState); 
         throw new Error(error.message);
@@ -308,11 +306,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         for (let i = 0; i < allRows.length; i += chunkSize) {
           const chunk = allRows.slice(i, i + chunkSize);
           const { error } = await supabase.from('crm_entities').insert(chunk);
-          if (error) throw error;
+          if (error) {
+             if (error.message.includes("invalid input syntax for type uuid")) {
+                throw new Error("Cloud Sync Failed: Your cloud database is strictly typed to UUIDs and cannot accept legacy IDs. Please go to Settings and run the SQL script in the Supabase Editor to fix the database schema.");
+             }
+             throw error;
+          }
         }
       }
     } catch (e: any) {
       console.error('Cloud mass-sync failed:', e.message);
+      throw e;
     }
   };
 

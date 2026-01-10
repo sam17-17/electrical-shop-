@@ -26,10 +26,10 @@ CREATE TABLE IF NOT EXISTS public.crm_entities (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- 2. FIX FOR "invalid input syntax for type uuid"
--- Run this if your table already exists and uses UUID for the ID column.
--- This converts it to TEXT so human-friendly IDs like 'INV-1001' can be saved.
-ALTER TABLE public.crm_entities ALTER COLUMN id SET DATA TYPE TEXT;
+-- 2. CRITICAL FIX FOR "invalid input syntax for type uuid"
+-- If your 'id' column is already UUID, this command forces it to TEXT.
+-- This allows the CRM to save both standard UUIDs and custom references.
+ALTER TABLE public.crm_entities ALTER COLUMN id TYPE TEXT USING id::text;
 
 -- 3. ENABLE ROW LEVEL SECURITY
 ALTER TABLE public.crm_entities ENABLE ROW LEVEL SECURITY;
@@ -182,11 +182,10 @@ $$;`;
                 <div className="mt-4 p-4 bg-amber-50 rounded-xl border border-amber-200 flex items-start">
                     <AlertTriangle className="w-5 h-5 text-amber-600 mr-3 shrink-0 mt-0.5" />
                     <div>
-                        <p className="text-xs font-bold text-amber-800">Critical Fix for UUID Errors</p>
+                        <p className="text-xs font-bold text-amber-800">Final Step to Fix ID Errors</p>
                         <p className="text-[11px] text-amber-700 mt-1">
-                            If you see "invalid input syntax for type uuid", your database table was likely created with a UUID column. 
-                            The updated script above includes an <b>ALTER TABLE</b> command to convert it to <b>TEXT</b>. 
-                            This allows you to save both system-generated UUIDs and human-readable IDs.
+                            If you still see "invalid input syntax for type uuid", it means your database column is strictly typed to UUIDs only. 
+                            <b>Copy the script above and run it in the Supabase SQL Editor.</b> It includes the fix to change the column to TEXT.
                         </p>
                     </div>
                 </div>
