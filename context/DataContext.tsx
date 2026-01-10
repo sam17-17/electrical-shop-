@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { EntityType, EntityState, GenericEntity } from '../types';
 import { getSupabase } from '../services/supabase';
@@ -100,10 +101,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } else {
           setDbNeedsSetup(false);
           
-          // Added explicit type cast to any[] to fix 'Property length does not exist on type unknown' error
           if (Array.isArray(dbData) && (dbData as any[]).length === 0) {
-            // HEARTBEAT CHECK: If cloud is empty but local has data, trigger recovery mode
-            const hasLocalData = Object.values(local).some(arr => arr.length > 0);
+            // Fix: Explicitly cast 'arr' to avoid type error where '.length' is missing on 'unknown'
+            const hasLocalData = Object.values(local).some((arr: any) => arr.length > 0);
             if (hasLocalData && !autoSyncDone.current) {
                setIsRecovering(true);
                setData(local);
@@ -168,6 +168,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (error) {
       setData(oldState);
+      if (error.message.includes("foreign key constraint")) {
+        throw new Error("Cloud Sync Failed: Incompatible database constraint. Go to Settings and run the UPDATED SQL script to remove the foreign key constraint.");
+      }
       throw new Error(error.message);
     }
   };
@@ -220,7 +223,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (allRows.length > 0) {
-        // SAFETY FIX: Use UPSERT instead of DELETE + INSERT to prevent data voids
         const chunkSize = 50;
         for (let i = 0; i < allRows.length; i += chunkSize) {
           const { error } = await supabase.from('crm_entities').upsert(allRows.slice(i, i + chunkSize), { onConflict: 'id' });

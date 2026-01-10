@@ -16,7 +16,7 @@ export const Settings: React.FC = () => {
   const [copied, setCopied] = useState(false);
   const [isMigrating, setIsMigrating] = useState(false);
 
-  const sqlSchema = `-- 1. CREATE CORE TABLE
+  const sqlSchema = `-- 1. CREATE CORE TABLE (If not exists)
 CREATE TABLE IF NOT EXISTS public.crm_entities (
     id TEXT PRIMARY KEY,
     type TEXT NOT NULL,
@@ -25,17 +25,32 @@ CREATE TABLE IF NOT EXISTS public.crm_entities (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- 2. CRITICAL TYPE FIX FOR UUID ERRORS
--- Force both 'id' and 'user_id' to be TEXT to support legacy IDs and Virtual Admins
+-- 2. RESOLVE FOREIGN KEY CONFLICTS & CONVERT TYPES
+-- If your 'user_id' has a foreign key to auth.users (UUID), 
+-- PostgreSQL won't let you change it to TEXT without dropping the constraint first.
+DO $$
+BEGIN
+    -- Drop the constraint if it exists to allow type conversion
+    IF EXISTS (
+        SELECT 1 FROM information_schema.table_constraints 
+        WHERE constraint_name = 'crm_entities_user_id_fkey' 
+        AND table_name = 'crm_entities'
+    ) THEN
+        ALTER TABLE public.crm_entities DROP CONSTRAINT crm_entities_user_id_fkey;
+    END IF;
+END $$;
+
+-- 3. FORCE CONVERT COLUMNS TO TEXT
+-- This allows compatibility with legacy IDs and human-readable references.
 ALTER TABLE public.crm_entities ALTER COLUMN id TYPE TEXT USING id::text;
 ALTER TABLE public.crm_entities ALTER COLUMN user_id TYPE TEXT USING user_id::text;
 
--- 3. SHARED TEAM ACCESS (RLS)
+-- 4. SHARED TEAM ACCESS (RLS)
 ALTER TABLE public.crm_entities ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Shared team access" ON public.crm_entities;
 CREATE POLICY "Shared team access" ON public.crm_entities FOR ALL TO public USING (true) WITH CHECK (true);
 
--- 4. REALTIME ENABLE
+-- 5. REALTIME ENABLE
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'crm_entities') THEN
@@ -147,6 +162,15 @@ END $$;`;
                         <span className="text-[10px] font-bold">{copied ? 'Copied' : 'Copy SQL'}</span>
                     </button>
                     <pre className="text-indigo-200 whitespace-pre-wrap leading-relaxed">{sqlSchema}</pre>
+                </div>
+                <div className="mt-4 p-4 bg-indigo-50 rounded-xl border border-indigo-100 flex items-start">
+                    <Info className="w-5 h-5 text-indigo-600 mr-3 shrink-0 mt-0.5" />
+                    <div>
+                        <p className="text-xs font-bold text-indigo-800">Why this script?</p>
+                        <p className="text-[11px] text-indigo-700 mt-1">
+                            This script converts column types to support both standard UUIDs and custom human-readable IDs. It also handles dropping foreign key constraints that might otherwise block the upgrade.
+                        </p>
+                    </div>
                 </div>
             </div>
         </div>
