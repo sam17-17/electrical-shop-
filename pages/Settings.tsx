@@ -17,34 +17,30 @@ export const Settings: React.FC = () => {
   const [isMigrating, setIsMigrating] = useState(false);
 
   const sqlSchema = `-- STEP 1: CREATE THE CORE TABLE
--- user_id is now NULLABLE to allow "Virtual Users" to exist without a standard Auth profile.
+-- user_id is TEXT to allow both Supabase UUIDs and Virtual User IDs.
 CREATE TABLE IF NOT EXISTS public.crm_entities (
     id TEXT PRIMARY KEY,
     type TEXT NOT NULL,
     content JSONB NOT NULL DEFAULT '{}'::jsonb,
-    user_id UUID REFERENCES auth.users(id), 
+    user_id TEXT, 
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+
+-- OPTIONAL: If you already created the table with UUID user_id, run this to fix the error:
+-- ALTER TABLE public.crm_entities ALTER COLUMN user_id TYPE TEXT;
 
 -- STEP 2: ENABLE ROW LEVEL SECURITY
 ALTER TABLE public.crm_entities ENABLE ROW LEVEL SECURITY;
 
 -- STEP 3: CREATE ACCESS POLICIES
--- Policy for authenticated users
 DROP POLICY IF EXISTS "Shared team access" ON public.crm_entities;
 CREATE POLICY "Shared team access" ON public.crm_entities FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
--- CRITICAL: Allow Public lookup for Virtual Login
+-- Allow Public lookup for Virtual Login
 DROP POLICY IF EXISTS "Enable virtual login lookup" ON public.crm_entities;
 CREATE POLICY "Enable virtual login lookup" ON public.crm_entities FOR SELECT TO anon USING (type = 'system-users');
 
--- STEP 4: SEED CLOUD SUPER ADMIN (OPTIONAL)
--- If you want to force-inject the admin into the cloud via SQL editor:
--- INSERT INTO public.crm_entities (id, type, content) 
--- VALUES ('cloud-super-admin', 'system-users', '{"name": "Super Admin", "email": "superadmin@zill.com", "pin": "admin2025", "role": "Admin", "status": "Active"}')
--- ON CONFLICT (id) DO NOTHING;
-
--- STEP 5: ENABLE REALTIME
+-- STEP 4: ENABLE REALTIME
 ALTER PUBLICATION supabase_realtime ADD TABLE crm_entities;`;
 
   const handleCopySql = () => {
