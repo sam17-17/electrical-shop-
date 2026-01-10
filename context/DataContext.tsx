@@ -1,10 +1,9 @@
-
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { EntityType, EntityState, GenericEntity } from '../types';
 import { getSupabase } from '../services/supabase';
 import { useAuth } from './AuthContext';
 
-const APP_VERSION = '2.5.0';
+const APP_VERSION = '2.6.0';
 
 interface DataContextType {
   data: EntityState;
@@ -19,6 +18,7 @@ interface DataContextType {
   importData: (newData: EntityState, isUpgrade?: boolean) => Promise<void>;
   receivePayment: (invoiceId: string, amount: number, bankAccountId: string, date: string, reference: string) => Promise<void>;
   restoreFromLocal: () => Promise<void>;
+  convertEntity: (sourceType: EntityType, targetType: EntityType, sourceId: string) => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -134,7 +134,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(false);
   }, [isAuthenticated, supabase, isDemoMode, loadLocalData]);
 
-  // Atomic Real-time Updates Handler
   const handleRealtimeChange = useCallback((payload: any) => {
     const { eventType, new: newRecord, old: oldRecord } = payload;
     
@@ -145,13 +144,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       let newList = [...prev[type]];
       
       if (eventType === 'INSERT') {
-        // Prevent duplication if the client already has this record (optimistic update)
         if (newList.some(item => item.id === newRecord.id)) return prev;
         newList.push({ ...newRecord.content, id: newRecord.id });
       } else if (eventType === 'UPDATE') {
         newList = newList.map(item => item.id === newRecord.id ? { ...newRecord.content, id: newRecord.id } : item);
       } else if (eventType === 'DELETE') {
-        newList = newList.filter(item => item.id === oldRecord.id);
+        newList = newList.filter(item => item.id !== oldRecord.id);
       }
 
       const newState = { ...prev, [type]: newList };
@@ -167,37 +165,22 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     if (isDemoMode || !supabase || !isAuthenticated) return;
-    
     const channel = supabase.channel('global-sync-pool')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_entities' }, handleRealtimeChange)
       .on('broadcast', { event: 'app-upgrade' }, () => fetchData(true))
       .subscribe();
-
-    return () => { 
-      supabase.removeChannel(channel); 
-    };
+    return () => { supabase.removeChannel(channel); };
   }, [supabase, isDemoMode, isAuthenticated, handleRealtimeChange, fetchData]);
 
   const addEntity = async (type: EntityType, entity: Omit<GenericEntity, 'id'>) => {
     const id = (entity as any).id || generateUUID();
-    
-    // Technical Duplicate Block
     if (data[type].some(item => item.id === id)) return;
 
-    // Enhanced Business Duplicate Protection
     if (type === EntityType.CUSTOMERS || type === EntityType.SUPPLIERS) {
       const newName = (entity as any).name?.toString().toLowerCase().trim();
-      const newEmail = (entity as any).email?.toString().toLowerCase().trim();
-
-      const nameExists = data[type].some(item => 
-        item.name?.toString().toLowerCase().trim() === newName
-      );
-      const emailExists = newEmail && data[type].some(item => 
-        item.email?.toString().toLowerCase().trim() === newEmail
-      );
-
-      if (nameExists) throw new Error(`A ${type.slice(0, -1)} with this exact name already exists.`);
-      if (emailExists) throw new Error(`A ${type.slice(0, -1)} with this email address already exists.`);
+      if (data[type].some(item => item.name?.toString().toLowerCase().trim() === newName)) {
+        throw new Error(`A ${type.slice(0, -1)} with this name already exists.`);
+      }
     }
 
     const newEntity = { ...entity, id };
@@ -206,51 +189,23 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     
     setData(newState);
     saveLocalData(newState);
-
     if (isDemoMode || !supabase || dbNeedsSetup) return;
-
-    const { error } = await supabase
-      .from('crm_entities')
-      .upsert([{ 
-        id, 
-        type, 
-        content: { ...entity }, 
-        user_id: user?.id 
-      }], { onConflict: 'id' });
-
-    if (error) {
-      setData(oldState);
-      throw new Error(error.message);
-    }
+    const { error } = await supabase.from('crm_entities').upsert([{ id, type, content: { ...entity }, user_id: user?.id }], { onConflict: 'id' });
+    if (error) { setData(oldState); throw new Error(error.message); }
   };
 
   const updateEntity = async (type: EntityType, id: string, entity: Partial<GenericEntity>) => {
     const currentItems = data[type];
     const target = currentItems.find(i => i.id === id);
     if (!target) return;
-    
     const updatedEntity = { ...target, ...entity };
     const oldState = data;
     const newState = { ...data, [type]: currentItems.map(item => item.id === id ? updatedEntity : item) };
-    
     setData(newState);
     saveLocalData(newState);
-
     if (isDemoMode || !supabase || dbNeedsSetup) return;
-
-    const { error } = await supabase
-      .from('crm_entities')
-      .upsert({ 
-        id, 
-        type, 
-        content: { ...updatedEntity }, 
-        user_id: user?.id 
-      }, { onConflict: 'id' });
-
-    if (error) {
-      setData(oldState);
-      throw new Error(error.message);
-    }
+    const { error } = await supabase.from('crm_entities').upsert({ id, type, content: { ...updatedEntity }, user_id: user?.id }, { onConflict: 'id' });
+    if (error) { setData(oldState); throw new Error(error.message); }
   };
 
   const deleteEntity = async (type: EntityType, id: string) => {
@@ -258,13 +213,50 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const newState = { ...data, [type]: data[type].filter(i => i.id !== id) };
     setData(newState);
     saveLocalData(newState);
-
     if (isDemoMode || !supabase || dbNeedsSetup) return;
-
     const { error } = await supabase.from('crm_entities').delete().eq('id', id);
-    if (error) {
-      setData(oldState);
-      throw new Error(error.message);
+    if (error) { setData(oldState); throw new Error(error.message); }
+  };
+
+  /**
+   * LINKING ENGINE:
+   * Maps fields from source document to target document automatically.
+   */
+  const convertEntity = async (sourceType: EntityType, targetType: EntityType, sourceId: string) => {
+    const source = data[sourceType].find(i => i.id === sourceId);
+    if (!source) throw new Error("Source document not found");
+
+    const prefixMap: Record<string, string> = {
+        [EntityType.SALES_ORDERS]: 'RCP-',
+        [EntityType.DELIVERY_NOTES]: 'DN-',
+        [EntityType.SALES_INVOICES]: 'INV-'
+    };
+
+    const nextId = generateUUID();
+    const prefix = prefixMap[targetType] || 'DOC-';
+    const existing = data[targetType] || [];
+    const docRef = `${prefix}${existing.length + 1001}`;
+
+    const common = {
+        customer: source.customer,
+        phone: source.phone,
+        items: source.items || [],
+        amount: source.amount || 0,
+        date: new Date().toISOString().split('T')[0],
+        docRef: docRef,
+        sourceRef: `Converted from ${source.docRef || source.id}`
+    };
+
+    let specific = {};
+    if (targetType === EntityType.SALES_ORDERS) specific = { status: 'Confirmed' };
+    if (targetType === EntityType.DELIVERY_NOTES) specific = { status: 'Dispatched' };
+    if (targetType === EntityType.SALES_INVOICES) specific = { status: 'Unpaid', amountPaid: 0 };
+
+    await addEntity(targetType, { ...common, ...specific });
+    
+    // Optional: Mark source as converted/accepted
+    if (sourceType === EntityType.SALES_QUOTES) {
+        await updateEntity(sourceType, sourceId, { status: 'Accepted' });
     }
   };
 
@@ -272,7 +264,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setData(newData);
     saveLocalData(newData);
     if (isDemoMode || !supabase || dbNeedsSetup) return;
-
     const allRows: any[] = [];
     for (const [type, items] of Object.entries(newData)) {
       items.forEach(item => {
@@ -282,18 +273,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         allRows.push({ id: rowId, type, content, user_id: user?.id });
       });
     }
-
     if (allRows.length > 0) {
       const chunkSize = 50;
       for (let i = 0; i < allRows.length; i += chunkSize) {
         await supabase.from('crm_entities').upsert(allRows.slice(i, i + chunkSize), { onConflict: 'id' });
-      }
-      if (isUpgrade) {
-        await supabase.channel('global-sync-pool').send({
-          type: 'broadcast',
-          event: 'app-upgrade',
-          payload: { version: APP_VERSION, timestamp: Date.now() }
-        });
       }
     }
     setIsRecovering(false);
@@ -309,30 +292,16 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const invoice = data[EntityType.SALES_INVOICES].find(i => i.id === invoiceId);
     const bank = data[EntityType.BANK_CASH].find(i => i.id === bankAccountId);
     if (!invoice) return;
-    
     const newAmountPaid = Number(invoice.amountPaid || 0) + amount;
     const newStatus = newAmountPaid >= invoice.amount ? 'Paid' : 'Unpaid';
-    
     await updateEntity(EntityType.SALES_INVOICES, invoiceId, { amountPaid: newAmountPaid, status: newStatus });
-    await addEntity(EntityType.SALES_ORDERS, {
-      customer: invoice.customer, 
-      phone: invoice.phone, 
-      date, 
-      amount, 
-      status: 'Confirmed', 
-      items: invoice.items,
-      description: `Payment ref: ${reference}. Linked to Inv ${invoiceId}.`
-    });
-    
-    if (bank) {
-      await updateEntity(EntityType.BANK_CASH, bankAccountId, { balance: Number(bank.balance || 0) + amount });
-    }
+    if (bank) await updateEntity(EntityType.BANK_CASH, bankAccountId, { balance: Number(bank.balance || 0) + amount });
   };
 
   const getEntity = (type: EntityType, id: string) => data[type]?.find((item) => item.id === id);
 
   return (
-    <DataContext.Provider value={{ data, loading, dbNeedsSetup, isRecovering, lastSync, addEntity, updateEntity, deleteEntity, getEntity, importData, receivePayment, restoreFromLocal }}>
+    <DataContext.Provider value={{ data, loading, dbNeedsSetup, isRecovering, lastSync, addEntity, updateEntity, deleteEntity, getEntity, importData, receivePayment, restoreFromLocal, convertEntity }}>
       {children}
     </DataContext.Provider>
   );
