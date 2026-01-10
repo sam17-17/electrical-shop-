@@ -347,7 +347,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
 const AppContent: React.FC = () => {
   const { data, addEntity, updateEntity, deleteEntity, getEntity, loading: dataLoading } = useData();
-  const { isAuthenticated, loading: authLoading } = useAuth();
+  const { isAuthenticated, loading: authLoading, user } = useAuth();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [activeType, setActiveType] = useState<EntityType | null>(null);
@@ -402,25 +402,37 @@ const AppContent: React.FC = () => {
   const currentInitialData = (activeType && editingId) ? getEntity(activeType, editingId) : undefined;
   const modalTitle = editingId ? `Update ${activeType?.replace('-', ' ')}` : `Create ${activeType?.replace('-', ' ')}`;
 
+  const userRole = user?.user_metadata?.role || user?.role;
+
   return (
     <Router>
       <Layout>
         <Routes>
           <Route path="/" element={<Summary />} />
           <Route path="/settings" element={<Settings />} />
-          {NAV_ITEMS.filter(item => item.id !== EntityType.SUMMARY && item.id !== EntityType.SETTINGS).map((item) => (
-            <Route key={item.id} path={`/${item.id}`} element={
-                <EntityList 
-                  title={item.label}
-                  columns={COLUMNS[item.id] || DEFAULT_COLUMNS}
-                  data={data[item.id] || []}
-                  onAdd={() => handleAdd(item.id)}
-                  onEdit={(id) => handleEdit(item.id, id)}
-                  onDelete={(id) => handleDelete(item.id, id)}
-                />
-              } 
-            />
-          ))}
+          {NAV_ITEMS.filter(item => item.id !== EntityType.SUMMARY && item.id !== EntityType.SETTINGS).map((item) => {
+            const hasAccess = !item.requiredRole || userRole === item.requiredRole;
+            return (
+              <Route 
+                key={item.id} 
+                path={`/${item.id}`} 
+                element={
+                  hasAccess ? (
+                    <EntityList 
+                      title={item.label}
+                      columns={COLUMNS[item.id] || DEFAULT_COLUMNS}
+                      data={data[item.id] || []}
+                      onAdd={() => handleAdd(item.id)}
+                      onEdit={(id) => handleEdit(item.id, id)}
+                      onDelete={(id) => handleDelete(item.id, id)}
+                    />
+                  ) : (
+                    <Navigate to="/" replace />
+                  )
+                } 
+              />
+            );
+          })}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={modalTitle}>
