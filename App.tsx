@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Wallet, Users, FileText, ShoppingCart, Truck, 
   Briefcase, Receipt, Layers, Folder, UserCheck, BookOpen, 
   PieChart, Settings as SettingsIcon, Menu, X, ChevronRight,
-  ClipboardList, StickyNote, LogOut, Loader2, Database, Cloud, CloudOff, ShieldCheck,
+  ClipboardList, StickyNote, LogOut, Database, Cloud, CloudOff, ShieldCheck,
   AlertTriangle, ArrowRight
 } from 'lucide-react';
 import { EntityType, NavItem, DataColumn } from './types';
@@ -53,15 +53,9 @@ const COLUMNS: Record<string, DataColumn[]> = {
     { key: 'email', label: 'Email Address', type: 'email', required: true },
     { key: 'phone', label: 'Phone Number', type: 'phone' },
   ],
-  [EntityType.SALES_QUOTES]: [
-    ...SALES_QUOTES_COLS()
-  ],
-  [EntityType.SALES_ORDERS]: [ 
-    ...SALES_ORDERS_COLS()
-  ],
-  [EntityType.SALES_INVOICES]: [
-    ...SALES_INVOICES_COLS()
-  ],
+  [EntityType.SALES_QUOTES]: SALES_QUOTES_COLS(),
+  [EntityType.SALES_ORDERS]: SALES_ORDERS_COLS(),
+  [EntityType.SALES_INVOICES]: SALES_INVOICES_COLS(),
   [EntityType.DELIVERY_NOTES]: [
     { key: 'id', label: 'DN #', type: 'readonly' },
     { key: 'customer', label: 'Customer', type: 'select', sourceType: EntityType.CUSTOMERS, required: true },
@@ -83,12 +77,8 @@ const COLUMNS: Record<string, DataColumn[]> = {
     { key: 'email', label: 'Email', type: 'email', required: true },
     { key: 'phone', label: 'Phone', type: 'phone' },
   ],
-  [EntityType.PURCHASE_QUOTES]: [
-    ...PURCHASE_COLUMNS_BASE.map(c => c.key === 'status' ? { ...c, options: ['Draft', 'Sent', 'Rejected'] } : c)
-  ],
-  [EntityType.PURCHASE_ORDERS]: [
-    ...PURCHASE_COLUMNS_BASE.map(c => c.key === 'status' ? { ...c, options: ['Draft', 'Sent', 'Approved'] } : c)
-  ],
+  [EntityType.PURCHASE_QUOTES]: PURCHASE_COLUMNS_BASE.map(c => c.key === 'status' ? { ...c, options: ['Draft', 'Sent', 'Rejected'] } : c),
+  [EntityType.PURCHASE_ORDERS]: PURCHASE_COLUMNS_BASE.map(c => c.key === 'status' ? { ...c, options: ['Draft', 'Sent', 'Approved'] } : c),
   [EntityType.PURCHASE_INVOICES]: [
     { key: 'supplier', label: 'Supplier', type: 'select', sourceType: EntityType.SUPPLIERS, required: true },
     { key: 'date', label: 'Invoice Date', type: 'date', required: true },
@@ -125,11 +115,11 @@ const DEFAULT_COLUMNS: DataColumn[] = [
 
 const NAV_ITEMS: NavItem[] = [
   { id: EntityType.SUMMARY, label: 'Summary', icon: LayoutDashboard },
-  { id: EntityType.BANK_CASH, label: 'Bank & Cash', icon: Wallet },
+  { id: EntityType.BANK_CASH, label: 'Bank & Cash Accounts', icon: Wallet },
   { id: EntityType.CUSTOMERS, label: 'Customers', icon: Users, group: 'Sales' },
-  { id: EntityType.SALES_QUOTES, label: 'Quotations', icon: FileText, group: 'Sales' },
-  { id: EntityType.SALES_ORDERS, label: 'Receipts', icon: ShoppingCart, group: 'Sales' },
-  { id: EntityType.SALES_INVOICES, label: 'Sales Invoices', icon: Receipt, group: 'Sales' },
+  { id: EntityType.SALES_QUOTES, label: 'Sales Quotes', icon: FileText, group: 'Sales' },
+  { id: EntityType.SALES_ORDERS, label: 'Sales Orders', icon: ShoppingCart, group: 'Sales' },
+  { id: EntityType.SALES_INVOICES, label: 'Sales', icon: Receipt, group: 'Sales' },
   { id: EntityType.DELIVERY_NOTES, label: 'Delivery Notes', icon: Truck, group: 'Sales' },
   { id: EntityType.SUPPLIERS, label: 'Suppliers', icon: Briefcase, group: 'Purchases' },
   { id: EntityType.PURCHASE_QUOTES, label: 'Purchase Quotes', icon: ClipboardList, group: 'Purchases' },
@@ -153,9 +143,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const userRole = user?.user_metadata?.role || user?.role;
 
   const filteredNavItems = NAV_ITEMS.filter(item => {
-    if (item.requiredRole && item.requiredRole !== userRole) {
-      return false;
-    }
+    if (item.requiredRole && item.requiredRole !== userRole) return false;
     return true;
   });
 
@@ -173,60 +161,43 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden">
-      {!sidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-black/50 z-20 lg:hidden"
-          onClick={() => setSidebarOpen(true)}
-        />
-      )}
+      {!sidebarOpen && <div className="fixed inset-0 bg-black/50 z-20 lg:hidden" onClick={() => setSidebarOpen(true)} />}
 
-      <aside 
-        className={`${sidebarOpen ? 'w-64 translate-x-0' : 'w-0 -translate-x-full lg:w-20 lg:translate-x-0'} 
-        bg-slate-900 text-slate-300 transition-all duration-300 flex flex-col fixed lg:relative z-30 h-full border-r border-slate-800 shadow-xl`}
-      >
+      <aside className={`${sidebarOpen ? 'w-64 translate-x-0' : 'w-0 -translate-x-full lg:w-20 lg:translate-x-0'} bg-slate-900 text-slate-300 transition-all duration-300 flex flex-col fixed lg:relative z-30 h-full border-r border-slate-800 shadow-xl`}>
         <div className="h-16 flex items-center justify-between px-4 border-b border-slate-800">
           <div className={`font-bold text-white text-xl flex items-center space-x-2 ${!sidebarOpen && 'lg:hidden'}`}>
-             <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
-               <span className="text-white">Z</span>
-             </div>
+             <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center"><span className="text-white">Z</span></div>
              <span>ZILL</span>
           </div>
-           <button onClick={() => setSidebarOpen(!sidebarOpen)} className="lg:hidden p-1 hover:bg-slate-800 rounded">
-            <X className="w-5 h-5" />
-          </button>
+           <button onClick={() => setSidebarOpen(!sidebarOpen)} className="lg:hidden p-1 hover:bg-slate-800 rounded"><X className="w-5 h-5" /></button>
         </div>
 
         <nav className="flex-1 overflow-y-auto py-4">
           {Object.entries(groupedNav).map(([group, items]) => (
             <div key={group} className="mb-6">
-              {sidebarOpen && group !== 'Main' && (
-                <h3 className="px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
-                  {group}
-                </h3>
-              )}
+              {sidebarOpen && group !== 'Main' && <h3 className="px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">{group}</h3>}
               <ul>
-                {items.map((item) => (
-                  <li key={item.id}>
-                    <NavLink
-                      to={`/${item.id === EntityType.SUMMARY ? '' : item.id}`}
-                      className={({ isActive }) => `
-                        flex items-center px-4 py-2.5 transition-colors relative group
-                        ${isActive ? 'bg-indigo-600 text-white' : 'hover:bg-slate-800 hover:text-white'}
-                        ${!sidebarOpen ? 'justify-center' : ''}
-                      `}
-                    >
-                      <item.icon className={`w-5 h-5 ${sidebarOpen ? 'mr-3' : ''}`} />
-                      {sidebarOpen && <span className="text-sm font-medium">{item.label}</span>}
-                    </NavLink>
-                  </li>
-                ))}
+                {items.map((item) => {
+                  const count = data[item.id]?.length || 0;
+                  return (
+                    <li key={item.id}>
+                      <NavLink
+                        to={`/${item.id === EntityType.SUMMARY ? '' : item.id}`}
+                        className={({ isActive }) => `flex items-center px-4 py-2.5 transition-colors relative group ${isActive ? 'bg-indigo-600 text-white' : 'hover:bg-slate-800 hover:text-white'} ${!sidebarOpen ? 'justify-center' : ''}`}
+                      >
+                        <item.icon className={`w-5 h-5 ${sidebarOpen ? 'mr-3' : ''}`} />
+                        {sidebarOpen && <span className="text-sm font-medium">{item.label}</span>}
+                        {sidebarOpen && count > 0 && <span className="ml-auto text-[10px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded-full">{count}</span>}
+                      </NavLink>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           ))}
         </nav>
         
         <div className="border-t border-slate-800">
-           {/* Connection Status Sub-Footer */}
            {sidebarOpen && (
              <div className={`px-4 py-2 text-[10px] flex items-center justify-between ${isDemoMode ? 'text-amber-400 bg-amber-500/5' : 'text-emerald-400 bg-emerald-500/5'}`}>
                 <div className="flex items-center">
@@ -236,14 +207,9 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                 {!isDemoMode && !dbNeedsSetup && <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>}
              </div>
            )}
-
            <div className="flex items-center justify-between p-2">
               <div className={`flex-1 flex items-center p-2 rounded-lg cursor-default ${!sidebarOpen ? 'justify-center' : ''}`}>
-                <img 
-                  src={`https://ui-avatars.com/api/?name=${user?.email || 'User'}&background=64748b&color=fff`} 
-                  alt="User" 
-                  className="w-8 h-8 rounded-full bg-slate-700" 
-                />
+                <img src={`https://ui-avatars.com/api/?name=${user?.email || 'User'}&background=64748b&color=fff`} alt="User" className="w-8 h-8 rounded-full bg-slate-700" />
                 {sidebarOpen && (
                   <div className="ml-3 text-left overflow-hidden">
                     <p className="text-sm font-medium text-slate-300 truncate">{user?.username || user?.email?.split('@')[0] || 'User'}</p>
@@ -251,14 +217,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                   </div>
                 )}
               </div>
-
-              <button 
-                onClick={logout}
-                className="p-2 rounded-lg hover:bg-red-500/10 text-slate-500 hover:text-red-500 transition-colors"
-                title="Logout"
-              >
-                <LogOut className="w-5 h-5" />
-              </button>
+              <button onClick={logout} className="p-2 rounded-lg hover:bg-red-500/10 text-slate-500 hover:text-red-500 transition-colors" title="Logout"><LogOut className="w-5 h-5" /></button>
            </div>
         </div>
       </aside>
@@ -266,26 +225,15 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       <div className="flex-1 flex flex-col h-full overflow-hidden">
         <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 shadow-sm z-10">
           <div className="flex items-center">
-            <button 
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 mr-4 focus:outline-none"
-            >
-              <Menu className="w-5 h-5" />
-            </button>
+            <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 mr-4 focus:outline-none"><Menu className="w-5 h-5" /></button>
              <div className="hidden md:flex items-center text-sm text-slate-500">
               <span>ZILL</span>
               <ChevronRight className="w-4 h-4 mx-2" />
-              <span className="font-semibold text-slate-800 capitalize">
-                {location.pathname === '/' ? 'Summary' : location.pathname.substring(1).replace('-', ' ')}
-              </span>
+              <span className="font-semibold text-slate-800 capitalize">{location.pathname === '/' ? 'Summary' : location.pathname.substring(1).replace('-', ' ')}</span>
              </div>
           </div>
-          
           <div className="flex items-center space-x-4">
-            <div className="text-right hidden sm:block">
-              <p className="text-xs text-slate-400">Organization</p>
-              <p className="text-sm font-semibold text-slate-700">Geosam Investments CRM</p>
-            </div>
+            <div className="text-right hidden sm:block"><p className="text-xs text-slate-400">Organization</p><p className="text-sm font-semibold text-slate-700">Enterprise Dynamics</p></div>
           </div>
         </header>
 
@@ -294,22 +242,14 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             <div className="bg-amber-50 border-b border-amber-200 px-6 py-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-fade-in shrink-0">
                <div className="flex items-center text-amber-800 text-sm font-medium">
                   <AlertTriangle className="w-5 h-5 mr-3 text-amber-500 shrink-0" />
-                  <div>
-                    <p className="font-bold">Database Table Missing</p>
-                    <p className="opacity-80">Cloud features are disabled. Please run the SQL setup script to enable team sync.</p>
-                  </div>
+                  <div><p className="font-bold">Database Needs Setup</p><p className="opacity-80">Sync features disabled. Setup the cloud table to enable collaboration.</p></div>
                </div>
-               <Link to="/settings" className="flex items-center px-4 py-1.5 bg-amber-600 text-white rounded-lg text-xs font-bold hover:bg-amber-700 transition-colors shadow-sm whitespace-nowrap">
-                  View SQL Script <ArrowRight className="w-3 h-3 ml-2" />
-               </Link>
+               <Link to="/settings" className="flex items-center px-4 py-1.5 bg-amber-600 text-white rounded-lg text-xs font-bold hover:bg-amber-700 transition-colors shadow-sm whitespace-nowrap">Setup Database <ArrowRight className="w-3 h-3 ml-2" /></Link>
             </div>
           )}
-          <div className="flex-1 p-6">
-            {children}
-          </div>
+          <div className="flex-1 p-6">{children}</div>
         </main>
       </div>
-
       <AiAssistant currentPageData={contextString} />
     </div>
   );
@@ -317,7 +257,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
 const AppContent: React.FC = () => {
   const { data, addEntity, updateEntity, deleteEntity, getEntity, loading: dataLoading } = useData();
-  const { isAuthenticated, loading: authLoading, user } = useAuth();
+  const { isAuthenticated, loading: authLoading } = useAuth();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [activeType, setActiveType] = useState<EntityType | null>(null);
@@ -327,19 +267,15 @@ const AppContent: React.FC = () => {
       <div className="h-screen w-full flex flex-col items-center justify-center bg-slate-50">
         <div className="relative">
           <div className="w-16 h-16 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin"></div>
-          <div className="absolute inset-0 flex items-center justify-center">
-            <Database className="w-6 h-6 text-indigo-600" />
-          </div>
+          <div className="absolute inset-0 flex items-center justify-center"><Database className="w-6 h-6 text-indigo-600" /></div>
         </div>
         <p className="text-slate-600 font-bold mt-6">ZILL CRM</p>
-        <p className="text-slate-400 text-sm mt-1 animate-pulse">Initializing data vaults...</p>
+        <p className="text-slate-400 text-sm mt-1 animate-pulse">Initializing cloud data...</p>
       </div>
     );
   }
 
-  if (!isAuthenticated) {
-    return <Login />;
-  }
+  if (!isAuthenticated) return <Login />;
 
   const handleAdd = (type: EntityType) => {
     setActiveType(type);
@@ -354,22 +290,17 @@ const AppContent: React.FC = () => {
   };
 
   const handleDelete = (type: EntityType, id: string) => {
-    if (window.confirm('Are you sure you want to delete this item?')) {
-      deleteEntity(type, id);
-    }
+    if (window.confirm('Delete this item?')) deleteEntity(type, id);
   };
 
   const handleFormSubmit = async (formData: any) => {
     if (!activeType) return;
     try {
-        if (editingId) {
-          await updateEntity(activeType, editingId, formData);
-        } else {
-          await addEntity(activeType, formData);
-        }
+        if (editingId) await updateEntity(activeType, editingId, formData);
+        else await addEntity(activeType, formData);
         setModalOpen(false);
     } catch (e: any) {
-        alert(`Operation failed: ${e.message}`);
+        alert(`Failed: ${e.message}`);
     }
   };
 
@@ -384,10 +315,7 @@ const AppContent: React.FC = () => {
           <Route path="/" element={<Summary />} />
           <Route path="/settings" element={<Settings />} />
           {NAV_ITEMS.filter(item => item.id !== EntityType.SUMMARY && item.id !== EntityType.SETTINGS).map((item) => (
-            <Route 
-              key={item.id} 
-              path={`/${item.id}`} 
-              element={
+            <Route key={item.id} path={`/${item.id}`} element={
                 <EntityList 
                   title={item.label}
                   columns={COLUMNS[item.id] || DEFAULT_COLUMNS}
@@ -401,19 +329,8 @@ const AppContent: React.FC = () => {
           ))}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-
-        <Modal 
-          isOpen={modalOpen} 
-          onClose={() => setModalOpen(false)}
-          title={modalTitle}
-        >
-          <EntityForm 
-            columns={currentColumns}
-            initialData={currentInitialData}
-            onSubmit={handleFormSubmit}
-            onCancel={() => setModalOpen(false)}
-            entityType={activeType || undefined}
-          />
+        <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={modalTitle}>
+          <EntityForm columns={currentColumns} initialData={currentInitialData} onSubmit={handleFormSubmit} onCancel={() => setModalOpen(false)} entityType={activeType || undefined} />
         </Modal>
       </Layout>
     </Router>

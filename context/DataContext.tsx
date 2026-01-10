@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { EntityType, EntityState, GenericEntity } from '../types';
 import { getSupabase } from '../services/supabase';
@@ -88,7 +87,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } else {
           setDbNeedsSetup(false);
           const groupedData = { ...INITIAL_STATE };
-          // Cast dbData to any[] to avoid "unknown" type issues when processing rows
           (dbData as any[])?.forEach((row) => {
             const type = row.type as EntityType;
             if (groupedData[type]) {
@@ -98,13 +96,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           
           setData(groupedData);
 
-          // Automatic Sync Logic: If cloud is empty but local has data, sync it once
-          // Fix: Properly cast dbData to any[] and check length safely.
           if (Array.isArray(dbData) && (dbData as any[]).length === 0 && !autoSyncDone.current) {
             const localData = loadLocalData();
-            const hasData = Object.values(localData).some(arr => arr.length > 0);
+            // Added explicit type casting for arr to fix "Property 'length' does not exist on type 'unknown'"
+            const hasData = Object.values(localData).some((arr: any) => arr.length > 0);
             if (hasData) {
-              console.log('Detected local data with empty cloud. Triggering automatic sync...');
               importData(localData).catch(err => console.error("Auto-sync failed", err));
             }
           }
@@ -151,7 +147,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const id = (entity as any).id || Math.random().toString(36).substr(2, 9);
     const newEntity = { ...entity, id };
 
-    // Optimistic UI Update
     const oldState = data;
     const newState = { ...data, [type]: [...data[type], newEntity] };
     setData(newState);
@@ -159,7 +154,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (isDemoMode || !supabase || dbNeedsSetup) return;
 
-    if (!user?.id) throw new Error("User session expired. Please log in again.");
+    if (!user?.id) throw new Error("User session expired.");
 
     const content = { ...entity };
     delete (content as any).id;
@@ -169,10 +164,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .insert([{ id, type, content, user_id: user.id }]);
 
     if (error) {
-      if (error.message.includes("Could find the table")) {
+      if (error.message.includes("Could not find the table")) {
         setDbNeedsSetup(true);
       } else {
-        setData(oldState); // Rollback on non-setup error
+        setData(oldState); 
         throw new Error(error.message);
       }
     }
@@ -184,8 +179,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!target) return;
 
     const updatedEntity = { ...target, ...entity };
-    
-    // Optimistic UI Update
     const oldState = data;
     const updatedItems = currentItems.map(item => item.id === id ? updatedEntity : item);
     const newState = { ...data, [type]: updatedItems };
@@ -203,7 +196,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .eq('id', id);
 
     if (error) {
-      setData(oldState); // Rollback
+      setData(oldState); 
       throw new Error(error.message);
     }
   };
@@ -222,7 +215,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .eq('id', id);
 
     if (error) {
-      setData(oldState); // Rollback
+      setData(oldState); 
       throw new Error(error.message);
     }
   };
@@ -268,7 +261,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (isDemoMode || !supabase || dbNeedsSetup) return;
 
     try {
-      // Clear cloud and push new
       await supabase.from('crm_entities').delete().neq('id', 'dummy_to_allow_mass_delete'); 
       
       for (const [type, items] of Object.entries(newData)) {
@@ -286,7 +278,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (e: any) {
       console.error('Cloud import failed:', e.message);
-      // We don't rollback local state here because the user likely wants their data locally regardless
     }
   };
 

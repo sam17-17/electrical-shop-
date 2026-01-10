@@ -39,8 +39,6 @@ export const EntityList: React.FC<EntityListProps> = ({
   const [viewingItem, setViewingItem] = useState<GenericEntity | null>(null);
   const [paymentItem, setPaymentItem] = useState<GenericEntity | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  
-  // Multi-select state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBulkActionLoading, setIsBulkActionLoading] = useState(false);
 
@@ -51,25 +49,20 @@ export const EntityList: React.FC<EntityListProps> = ({
     doc.setTextColor(15, 23, 42); 
     doc.setFontSize(24);
     doc.setFont('helvetica', 'bold');
-    doc.text("GEOSAM", 14, 20);
+    doc.text("ZILL CRM", 14, 20);
 
     doc.setFontSize(7.5);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(100, 116, 139); 
-    doc.text("T E C H N O L O G Y", 14.5, 25);
+    doc.text("E N T E R P R I S E", 14.5, 25);
 
-    doc.setFillColor(249, 115, 22); 
+    doc.setFillColor(79, 70, 229); 
     doc.circle(58, 14, 2.5, 'F'); 
-
-    doc.setDrawColor(13, 148, 136); 
-    doc.setLineWidth(1);
-    doc.line(42, 12, 54, 12); 
 
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(71, 85, 105); 
-    doc.text("P.O. Box 12345 - 00100, Nairobi, Kenya", 14, 32);
-    doc.text("+254 700 000 000 | info@geosamtechnology.co.ke", 14, 37);
+    doc.text("Cloud Powered Relationship Management", 14, 32);
 
     doc.setDrawColor(226, 232, 240); 
     doc.setLineWidth(0.5);
@@ -83,7 +76,7 @@ export const EntityList: React.FC<EntityListProps> = ({
         EntityType.PURCHASE_ORDERS
     ].includes(currentPath);
 
-    doc.setTextColor(13, 148, 136); 
+    doc.setTextColor(79, 70, 229); 
     doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
     
@@ -97,12 +90,12 @@ export const EntityList: React.FC<EntityListProps> = ({
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(30, 41, 59);
-    doc.text(`Ref #: ${item.id}`, 196, 26, { align: 'right' });
-    doc.text(`Date: ${item.date ? new Date(item.date).toLocaleDateString() : new Date().toLocaleDateString()}`, 196, 31, { align: 'right' });
+    doc.text(`Ref #: ${item.id || 'N/A'}`, 196, 26, { align: 'right' });
+    const itemDate = item.date ? new Date(item.date).toLocaleDateString() : new Date().toLocaleDateString();
+    doc.text(`Date: ${itemDate}`, 196, 31, { align: 'right' });
     
     if (item.status) {
         doc.setFont('helvetica', 'bold');
-        doc.setTextColor(item.status === 'Paid' ? 'green' : item.status === 'Overdue' ? 'red' : 'gray');
         doc.text(`Status: ${item.status.toUpperCase()}`, 196, 37, { align: 'right' });
     }
 
@@ -111,9 +104,9 @@ export const EntityList: React.FC<EntityListProps> = ({
         doc.setFontSize(10);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(71, 85, 105);
-        doc.text("BILL TO:", 14, 55);
+        doc.text("PARTY DETAILS:", 14, 55);
         doc.setFontSize(11);
-        doc.text(item.customer || item.supplier || "Walk-in Customer", 14, 61);
+        doc.text(item.customer || item.supplier || "N/A", 14, 61);
         doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
         if (item.phone) doc.text(`Tel: ${item.phone}`, 14, 66);
@@ -125,17 +118,17 @@ export const EntityList: React.FC<EntityListProps> = ({
         let tableHead = [['#', 'Item / Description', 'Qty', 'Unit Price', 'Total']];
         let tableBody = item.items.map((line: LineItem, index: number) => [
             (index + 1).toString(),
-            line.description,
+            line.description || 'No Description',
             line.quantity.toString(),
-            currencyFormatter.format(line.unitPrice),
-            currencyFormatter.format(line.total)
+            currencyFormatter.format(line.unitPrice || 0),
+            currencyFormatter.format(line.total || 0)
         ]);
 
         if (currentPath === EntityType.DELIVERY_NOTES) {
             tableHead = [['#', 'Item / Description', 'Quantity']];
             tableBody = item.items.map((line: LineItem, index: number) => [
                 (index + 1).toString(),
-                line.description,
+                line.description || 'No Description',
                 line.quantity.toString()
             ]);
         }
@@ -151,7 +144,7 @@ export const EntityList: React.FC<EntityListProps> = ({
 
         if (currentPath !== EntityType.DELIVERY_NOTES) {
             const finalY = (doc as any).lastAutoTable.finalY + 5;
-            const subTotal = item.items.reduce((sum: number, i: LineItem) => sum + i.total, 0);
+            const subTotal = item.items.reduce((sum: number, i: LineItem) => sum + (i.total || 0), 0);
             const vat = subTotal * 0.18;
             const grandTotal = subTotal + vat;
 
@@ -174,7 +167,7 @@ export const EntityList: React.FC<EntityListProps> = ({
     } else {
         const infoRows = columns
             .filter(col => col.key !== 'items' && col.type !== 'readonly')
-            .map(col => [col.label, col.type === 'currency' ? currencyFormatter.format(item[col.key] || 0) : item[col.key]]);
+            .map(col => [col.label, col.type === 'currency' ? currencyFormatter.format(item[col.key] || 0) : item[col.key] || 'N/A']);
         autoTable(doc, { startY, head: [['Field', 'Details']], body: infoRows, theme: 'striped' });
         startY = (doc as any).lastAutoTable.finalY + 15;
     }
@@ -182,7 +175,7 @@ export const EntityList: React.FC<EntityListProps> = ({
     if (item.description) {
       doc.setFontSize(9);
       doc.setFont('helvetica', 'bold');
-      doc.text("NOTES / TERMS:", 14, startY);
+      doc.text("REMARKS:", 14, startY);
       doc.setFont('helvetica', 'normal');
       doc.text(doc.splitTextToSize(item.description, 180), 14, startY + 6);
     }
@@ -191,8 +184,7 @@ export const EntityList: React.FC<EntityListProps> = ({
     doc.setDrawColor(226, 232, 240);
     doc.line(14, pageHeight - 15, 196, pageHeight - 15);
     doc.setFontSize(8);
-    doc.text("Thank you for your business!", 14, pageHeight - 10);
-    doc.text("Geosam Technology Systems", 196, pageHeight - 10, { align: 'right' });
+    doc.text("ZILL CRM - Future Ready Business", 14, pageHeight - 10);
     doc.save(`${docTitle.replace(/\s+/g, '_')}_${item.id}.pdf`);
   };
 
@@ -247,47 +239,22 @@ export const EntityList: React.FC<EntityListProps> = ({
           <Shield className="w-4 h-4 mr-2" />
           {selectedIds.size} Users Selected
         </div>
-
         <div className="h-6 w-px bg-indigo-200 mx-2 hidden sm:block"></div>
-
         <div className="relative group">
           <button className="flex items-center px-3 py-1.5 bg-white border border-indigo-200 rounded-lg text-xs font-semibold text-indigo-700 hover:bg-indigo-600 hover:text-white transition-all shadow-sm">
             Assign Role <ChevronDown className="w-3 h-3 ml-2" />
           </button>
           <div className="absolute top-full left-0 mt-1 w-40 bg-white border border-slate-200 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-all z-20 overflow-hidden">
             {['Admin', 'Manager', 'Sales Agent', 'Accountant', 'Viewer'].map(role => (
-              <button 
-                key={role}
-                onClick={() => handleBulkUpdate({ role })}
-                className="w-full text-left px-4 py-2 text-xs hover:bg-indigo-50 text-slate-700 transition-colors border-b border-slate-50 last:border-0"
-              >
-                {role}
-              </button>
+              <button key={role} onClick={() => handleBulkUpdate({ role })} className="w-full text-left px-4 py-2 text-xs hover:bg-indigo-50 text-slate-700 transition-colors border-b border-slate-50 last:border-0">{role}</button>
             ))}
           </div>
         </div>
-
         <div className="flex gap-2">
-          <button 
-            onClick={() => handleBulkUpdate({ status: 'Active' })}
-            className="flex items-center px-3 py-1.5 bg-white border border-emerald-200 rounded-lg text-xs font-semibold text-emerald-700 hover:bg-emerald-600 hover:text-white transition-all shadow-sm"
-          >
-            <UserCheck className="w-3.5 h-3.5 mr-2" /> Activate
-          </button>
-          <button 
-            onClick={() => handleBulkUpdate({ status: 'Suspended' })}
-            className="flex items-center px-3 py-1.5 bg-white border border-red-200 rounded-lg text-xs font-semibold text-red-700 hover:bg-red-600 hover:text-white transition-all shadow-sm"
-          >
-            <ToggleLeft className="w-3.5 h-3.5 mr-2" /> Deactivate
-          </button>
+          <button onClick={() => handleBulkUpdate({ status: 'Active' })} className="flex items-center px-3 py-1.5 bg-white border border-emerald-200 rounded-lg text-xs font-semibold text-emerald-700 hover:bg-emerald-600 hover:text-white transition-all shadow-sm"><UserCheck className="w-3.5 h-3.5 mr-2" /> Activate</button>
+          <button onClick={() => handleBulkUpdate({ status: 'Suspended' })} className="flex items-center px-3 py-1.5 bg-white border border-red-200 rounded-lg text-xs font-semibold text-red-700 hover:bg-red-600 hover:text-white transition-all shadow-sm"><ToggleLeft className="w-3.5 h-3.5 mr-2" /> Deactivate</button>
         </div>
-
-        <button 
-          onClick={() => setSelectedIds(new Set())}
-          className="ml-auto text-xs font-medium text-indigo-400 hover:text-indigo-600"
-        >
-          Deselect All
-        </button>
+        <button onClick={() => setSelectedIds(new Set())} className="ml-auto text-xs font-medium text-indigo-400 hover:text-indigo-600">Deselect All</button>
       </div>
     );
   };
@@ -399,7 +366,6 @@ export const EntityList: React.FC<EntityListProps> = ({
               <div key={c.key} className="p-3 bg-white border border-slate-100 rounded-lg shadow-sm">
                 <p className="text-[10px] text-slate-400 uppercase font-bold tracking-widest mb-1">{c.label}</p>
                 <p className="text-sm font-medium text-slate-700">
-                  {/* For viewing PINs, we show them as requested for admin view */}
                   {renderCell(viewingItem[c.key], c.type, c.key === 'pin' ? 'visible-pin' : c.key)}
                 </p>
               </div>
@@ -409,7 +375,7 @@ export const EntityList: React.FC<EntityListProps> = ({
             <h4 className="text-sm font-bold text-slate-800 mb-2 px-1">Line Items</h4>
             <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
               <table className="w-full text-sm text-left">
-                <thead className="bg-slate-50"><tr><th className="px-3 py-2 text-slate-500">Item Description</th><th className="px-3 py-2 text-center text-slate-500">Qty</th><th className="px-3 py-2 text-right text-slate-500">Price</th><th className="px-3 py-2 text-right text-slate-500">Total</th></tr></thead>
+                <thead className="bg-slate-50"><tr><th className="px-3 py-2 text-slate-500">Description</th><th className="px-3 py-2 text-center text-slate-500">Qty</th><th className="px-3 py-2 text-right text-slate-500">Price</th><th className="px-3 py-2 text-right text-slate-500">Total</th></tr></thead>
                 <tbody className="divide-y divide-slate-100">{viewingItem.items.map((i: any, idx: number) => <tr key={idx} className="bg-white"><td className="px-3 py-2 text-slate-700">{i.description}</td><td className="px-3 py-2 text-center text-slate-600">{i.quantity}</td><td className="px-3 py-2 text-right text-slate-600">{renderCell(i.unitPrice, 'currency', 'price')}</td><td className="px-3 py-2 text-right font-semibold text-slate-800">{renderCell(i.total, 'currency', 'total')}</td></tr>)}</tbody>
               </table>
             </div>

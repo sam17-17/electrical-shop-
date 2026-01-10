@@ -80,7 +80,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const login = async (username: string, password: string) => {
-    // 1. Check Local Demo Admin (Only for testing without cloud)
+    // 1. Check Local Demo Admin
     if (username === 'admin' && password === '1234') {
       const mockUser = { id: 'mock-admin', email: 'admin@zill.com', username: 'Local Admin', role: 'Admin', isDemo: true };
       setUser(mockUser);
@@ -89,18 +89,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: true };
     }
 
-    if (!supabase) return { success: false, error: 'Cloud database not connected' };
+    // 2. CHECK FOR SUPER ADMIN BOOTSTRAP (Allows setup when DB table is missing)
+    const isBootstrap = (username === 'superadmin' || username === 'superadmin@zill.com') && password === 'admin2025';
+
+    if (!supabase) {
+        if (isBootstrap) {
+            const superUser = { id: 'bootstrap-admin', email: 'superadmin@zill.com', username: 'Super Admin', role: 'Admin', isDemo: true };
+            setUser(superUser);
+            setIsDemoMode(true);
+            localStorage.setItem('zill_active_user', JSON.stringify(superUser));
+            return { success: true };
+        }
+        return { success: false, error: 'Cloud database not connected' };
+    }
 
     try {
-      // 2. Fetch all system users from CLOUD
       const { data: virtualUsers, error: vError } = await supabase
         .from('crm_entities')
         .select('*')
         .eq('type', 'system-users');
 
-      // 3. Cloud Bootstrap Logic: If database has NO users, allow the first superadmin to enter and seed
-      if (!vError && virtualUsers && virtualUsers.length === 0) {
-        if ((username === 'superadmin' || username === 'superadmin@zill.com') && password === 'admin2025') {
+      // 3. ALLOW BOOTSTRAP IF ERROR (TABLE NOT FOUND) OR EMPTY
+      if (isBootstrap && (vError || !virtualUsers || virtualUsers.length === 0)) {
           const cloudAdmin = { 
             id: 'cloud-seed-admin', 
             email: 'superadmin@zill.com', 
@@ -110,22 +120,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             isDemo: false 
           };
           
-          // Try to seed the user record in the cloud immediately so it's "Stored in Cloud" for next time
-          try {
-            await supabase.from('crm_entities').insert([{
-               id: 'cloud-seed-admin',
-               type: 'system-users',
-               content: { name: 'Super Admin', email: 'superadmin@zill.com', pin: 'admin2025', role: 'Admin', status: 'Active' }
-            }]);
-          } catch(e) { /* Table might not exist yet */ }
+          if (!vError) {
+             try {
+                await supabase.from('crm_entities').insert([{
+                   id: 'cloud-seed-admin',
+                   type: 'system-users',
+                   content: { name: 'Super Admin', email: 'superadmin@zill.com', pin: 'admin2025', role: 'Admin', status: 'Active' }
+                }]);
+             } catch(e) {}
+          }
 
           setUser(cloudAdmin);
           localStorage.setItem('zill_active_user', JSON.stringify(cloudAdmin));
           return { success: true };
-        }
       }
 
-      // 4. Verify Virtual User Credentials against CLOUD data
+      // 4. Standard User Check
       if (!vError && virtualUsers) {
         const match = virtualUsers.find(v => 
           (v.content.email?.toLowerCase() === username.toLowerCase() || v.content.name?.toLowerCase() === username.toLowerCase()) && 
@@ -148,7 +158,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
 
-      // 5. Fallback: Standard Supabase Auth
+      // 5. Supabase Auth Fallback
       const email = username.includes('@') ? username : `${username}@zill.com`;
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ email, password });
       if (!authError && authData.user) {
@@ -167,7 +177,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error("Cloud login error", e);
     }
 
-    return { success: false, error: 'Invalid cloud credentials.' };
+    return { success: false, error: 'Authentication failed.' };
   };
 
   const logout = async () => {
