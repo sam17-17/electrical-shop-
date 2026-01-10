@@ -38,8 +38,20 @@ FOR ALL TO public
 USING (true) 
 WITH CHECK (true);
 
--- 4. ENABLE REALTIME
-ALTER PUBLICATION supabase_realtime ADD TABLE crm_entities;`;
+-- 4. ENABLE REALTIME SAFELY
+-- This block checks if the table is already in the publication to avoid errors.
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_publication_tables 
+        WHERE pubname = 'supabase_realtime' 
+        AND schemaname = 'public' 
+        AND tablename = 'crm_entities'
+    ) THEN
+        ALTER PUBLICATION supabase_realtime ADD TABLE public.crm_entities;
+    END IF;
+END
+$$;`;
 
   const handleCopySql = () => {
     navigator.clipboard.writeText(sqlSchema);
