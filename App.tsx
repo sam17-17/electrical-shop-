@@ -113,25 +113,37 @@ const DEFAULT_COLUMNS: DataColumn[] = [
   { key: 'description', label: 'Description', type: 'textarea' },
 ];
 
+const ROLES = {
+  ADMIN: 'Admin',
+  MANAGER: 'Manager',
+  SALES: 'Sales Agent',
+  ACCOUNTANT: 'Accountant',
+  VIEWER: 'Viewer'
+};
+
+const ALL_ROLES = [ROLES.ADMIN, ROLES.MANAGER, ROLES.SALES, ROLES.ACCOUNTANT, ROLES.VIEWER];
+const OPS_ROLES = [ROLES.ADMIN, ROLES.MANAGER, ROLES.SALES];
+const FINANCE_ROLES = [ROLES.ADMIN, ROLES.MANAGER, ROLES.ACCOUNTANT];
+
 const NAV_ITEMS: NavItem[] = [
-  { id: EntityType.SUMMARY, label: 'Summary', icon: LayoutDashboard },
-  { id: EntityType.BANK_CASH, label: 'Bank & Cash Accounts', icon: Wallet },
-  { id: EntityType.CUSTOMERS, label: 'Customers', icon: Users, group: 'Sales' },
-  { id: EntityType.SALES_QUOTES, label: 'Sales Quotes', icon: FileText, group: 'Sales' },
-  { id: EntityType.SALES_ORDERS, label: 'Sales Orders', icon: ShoppingCart, group: 'Sales' },
-  { id: EntityType.SALES_INVOICES, label: 'Sales', icon: Receipt, group: 'Sales' },
-  { id: EntityType.DELIVERY_NOTES, label: 'Delivery Notes', icon: Truck, group: 'Sales' },
-  { id: EntityType.SUPPLIERS, label: 'Suppliers', icon: Briefcase, group: 'Purchases' },
-  { id: EntityType.PURCHASE_QUOTES, label: 'Purchase Quotes', icon: ClipboardList, group: 'Purchases' },
-  { id: EntityType.PURCHASE_ORDERS, label: 'Purchase Orders', icon: StickyNote, group: 'Purchases' },
-  { id: EntityType.PURCHASE_INVOICES, label: 'Purchase Invoices', icon: Receipt, group: 'Purchases' },
-  { id: EntityType.INVENTORY, label: 'Inventory Items', icon: Layers },
-  { id: EntityType.PROJECTS, label: 'Projects', icon: Folder },
-  { id: EntityType.EMPLOYEES, label: 'Employees', icon: UserCheck },
-  { id: EntityType.JOURNAL, label: 'Journal Entries', icon: BookOpen },
-  { id: EntityType.REPORTS, label: 'Reports', icon: PieChart },
-  { id: EntityType.SYSTEM_USERS, label: 'System Users', icon: ShieldCheck, group: 'Administration', requiredRole: 'Admin' },
-  { id: EntityType.SETTINGS, label: 'Settings', icon: SettingsIcon },
+  { id: EntityType.SUMMARY, label: 'Summary', icon: LayoutDashboard, allowedRoles: ALL_ROLES },
+  { id: EntityType.BANK_CASH, label: 'Bank & Cash Accounts', icon: Wallet, allowedRoles: FINANCE_ROLES },
+  { id: EntityType.CUSTOMERS, label: 'Customers', icon: Users, group: 'Sales', allowedRoles: OPS_ROLES },
+  { id: EntityType.SALES_QUOTES, label: 'Sales Quotes', icon: FileText, group: 'Sales', allowedRoles: OPS_ROLES },
+  { id: EntityType.SALES_ORDERS, label: 'Sales Orders', icon: ShoppingCart, group: 'Sales', allowedRoles: OPS_ROLES },
+  { id: EntityType.SALES_INVOICES, label: 'Sales', icon: Receipt, group: 'Sales', allowedRoles: [...OPS_ROLES, ROLES.ACCOUNTANT] },
+  { id: EntityType.DELIVERY_NOTES, label: 'Delivery Notes', icon: Truck, group: 'Sales', allowedRoles: OPS_ROLES },
+  { id: EntityType.SUPPLIERS, label: 'Suppliers', icon: Briefcase, group: 'Purchases', allowedRoles: FINANCE_ROLES },
+  { id: EntityType.PURCHASE_QUOTES, label: 'Purchase Quotes', icon: ClipboardList, group: 'Purchases', allowedRoles: FINANCE_ROLES },
+  { id: EntityType.PURCHASE_ORDERS, label: 'Purchase Orders', icon: StickyNote, group: 'Purchases', allowedRoles: FINANCE_ROLES },
+  { id: EntityType.PURCHASE_INVOICES, label: 'Purchase Invoices', icon: Receipt, group: 'Purchases', allowedRoles: FINANCE_ROLES },
+  { id: EntityType.INVENTORY, label: 'Inventory Items', icon: Layers, allowedRoles: [...OPS_ROLES, ROLES.ACCOUNTANT] },
+  { id: EntityType.PROJECTS, label: 'Projects', icon: Folder, allowedRoles: OPS_ROLES },
+  { id: EntityType.EMPLOYEES, label: 'Employees', icon: UserCheck, allowedRoles: [ROLES.ADMIN, ROLES.MANAGER] },
+  { id: EntityType.JOURNAL, label: 'Journal Entries', icon: BookOpen, allowedRoles: [ROLES.ADMIN, ROLES.ACCOUNTANT] },
+  { id: EntityType.REPORTS, label: 'Reports', icon: PieChart, allowedRoles: [...FINANCE_ROLES, ROLES.VIEWER] },
+  { id: EntityType.SYSTEM_USERS, label: 'System Users', icon: ShieldCheck, group: 'Administration', allowedRoles: [ROLES.ADMIN] },
+  { id: EntityType.SETTINGS, label: 'Settings', icon: SettingsIcon, allowedRoles: [ROLES.ADMIN] },
 ];
 
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -140,16 +152,11 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { data, dbNeedsSetup } = useData();
   const { user, logout, isDemoMode } = useAuth();
 
-  // Automatic Sidebar Resizing Logic
   useEffect(() => {
     const handleResize = () => {
-      if (window.innerWidth < 1024) {
-        setSidebarOpen(false);
-      } else {
-        setSidebarOpen(true);
-      }
+      if (window.innerWidth < 1024) setSidebarOpen(false);
+      else setSidebarOpen(true);
     };
-
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
@@ -157,8 +164,8 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const userRole = user?.user_metadata?.role || user?.role;
 
   const filteredNavItems = NAV_ITEMS.filter(item => {
-    if (item.requiredRole && item.requiredRole !== userRole) return false;
-    return true;
+    if (!item.allowedRoles) return true;
+    return item.allowedRoles.includes(userRole);
   });
 
   const groupedNav = filteredNavItems.reduce((acc, item) => {
@@ -175,7 +182,6 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden relative">
-      {/* Mobile Sidebar Overlay */}
       {sidebarOpen && (
         <div 
           className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-20 lg:hidden transition-opacity" 
@@ -195,10 +201,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
              </div>
              <span className="truncate">ZILL</span>
           </div>
-          <button 
-            onClick={() => setSidebarOpen(false)} 
-            className="lg:hidden p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 transition-colors"
-          >
+          <button onClick={() => setSidebarOpen(false)} className="lg:hidden p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -230,11 +233,6 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                             {count}
                           </span>
                         )}
-                        {!sidebarOpen && (
-                          <div className="absolute left-full ml-2 px-2 py-1 bg-slate-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50">
-                            {item.label}
-                          </div>
-                        )}
                       </NavLink>
                     </li>
                   );
@@ -244,40 +242,19 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           ))}
         </nav>
         
-        <div className="border-t border-slate-800 shrink-0">
-           {sidebarOpen && (
-             <div className={`px-4 py-2 text-[10px] flex items-center justify-between ${isDemoMode ? 'text-amber-400 bg-amber-500/5' : 'text-emerald-400 bg-emerald-500/5'}`}>
-                <div className="flex items-center truncate">
-                  {(isDemoMode || dbNeedsSetup) ? <CloudOff className="w-3 h-3 mr-1.5" /> : <Cloud className="w-3 h-3 mr-1.5" />}
-                  <span className="truncate">{(isDemoMode || dbNeedsSetup) ? 'STORAGE: LOCAL' : 'STORAGE: CLOUD SYNC'}</span>
-                </div>
-                {!isDemoMode && !dbNeedsSetup && <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0"></div>}
-             </div>
-           )}
-           <div className="flex items-center justify-between p-2">
+        <div className="border-t border-slate-800 shrink-0 p-2">
+           <div className="flex items-center justify-between">
               <div className={`flex-1 flex items-center p-2 rounded-lg cursor-default min-w-0 ${!sidebarOpen ? 'justify-center' : ''}`}>
-                <img 
-                  src={`https://ui-avatars.com/api/?name=${user?.email || 'User'}&background=64748b&color=fff`} 
-                  alt="User" 
-                  className="w-8 h-8 rounded-full bg-slate-700 shrink-0 shadow-inner" 
-                />
+                <img src={`https://ui-avatars.com/api/?name=${user?.email || 'User'}&background=64748b&color=fff`} className="w-8 h-8 rounded-full bg-slate-700 shrink-0" alt="" />
                 {sidebarOpen && (
                   <div className="ml-3 text-left min-w-0 overflow-hidden">
-                    <p className="text-sm font-semibold text-slate-300 truncate">
-                      {user?.username || user?.email?.split('@')[0] || 'User'}
-                    </p>
-                    <p className="text-[10px] text-slate-500 uppercase tracking-tighter truncate">
-                      {(isDemoMode || dbNeedsSetup) ? 'Local Admin' : 'Cloud Session'}
-                    </p>
+                    <p className="text-sm font-semibold text-slate-300 truncate">{user?.username || 'User'}</p>
+                    <p className="text-[10px] text-slate-500 uppercase truncate">{userRole}</p>
                   </div>
                 )}
               </div>
               {sidebarOpen && (
-                <button 
-                  onClick={logout} 
-                  className="p-2 rounded-lg hover:bg-red-500/10 text-slate-500 hover:text-red-500 transition-colors shrink-0" 
-                  title="Logout"
-                >
+                <button onClick={logout} className="p-2 rounded-lg hover:bg-red-500/10 text-slate-500 hover:text-red-500 transition-colors">
                   <LogOut className="w-5 h-5" />
                 </button>
               )}
@@ -286,12 +263,9 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       </aside>
 
       <div className="flex-1 flex flex-col h-full overflow-hidden min-w-0">
-        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 sm:px-6 shadow-sm z-10 shrink-0">
+        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 sm:px-6 shadow-sm z-10">
           <div className="flex items-center min-w-0">
-            <button 
-              onClick={() => setSidebarOpen(!sidebarOpen)} 
-              className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 mr-2 sm:mr-4 focus:outline-none transition-colors"
-            >
+            <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 mr-2 sm:mr-4">
               <Menu className="w-5 h-5" />
             </button>
              <div className="flex items-center text-sm text-slate-500 overflow-hidden">
@@ -302,41 +276,9 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
               </span>
              </div>
           </div>
-          <div className="flex items-center space-x-4 shrink-0">
-            <div className="text-right hidden md:block">
-              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider leading-none mb-1">Organization</p>
-              <p className="text-sm font-semibold text-slate-700 truncate">Enterprise Dynamics</p>
-            </div>
-            {!sidebarOpen && (
-               <button 
-                 onClick={logout} 
-                 className="lg:hidden p-2 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors" 
-                 title="Logout"
-               >
-                 <LogOut className="w-5 h-5" />
-               </button>
-            )}
-          </div>
         </header>
 
         <main className="flex-1 overflow-y-auto p-0 scroll-smooth flex flex-col min-w-0">
-          {dbNeedsSetup && (
-            <div className="bg-amber-50 border-b border-amber-200 px-4 sm:px-6 py-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-fade-in shrink-0">
-               <div className="flex items-center text-amber-800 text-sm font-medium">
-                  <AlertTriangle className="w-5 h-5 mr-3 text-amber-500 shrink-0" />
-                  <div>
-                    <p className="font-bold">Database Needs Setup</p>
-                    <p className="text-xs opacity-80">Sync features disabled. Setup the cloud table to enable collaboration.</p>
-                  </div>
-               </div>
-               <Link 
-                 to="/settings" 
-                 className="flex items-center px-4 py-2 bg-amber-600 text-white rounded-lg text-xs font-bold hover:bg-amber-700 transition-colors shadow-sm whitespace-nowrap"
-               >
-                 Setup Database <ArrowRight className="w-3 h-3 ml-2" />
-               </Link>
-            </div>
-          )}
           <div className="flex-1 p-4 sm:p-6 min-w-0">{children}</div>
         </main>
       </div>
@@ -354,20 +296,16 @@ const AppContent: React.FC = () => {
 
   if (authLoading || dataLoading) {
     return (
-      <div className="h-screen w-full flex flex-col items-center justify-center bg-slate-50 p-4 text-center">
-        <div className="relative">
-          <div className="w-16 h-16 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin shadow-sm"></div>
-          <div className="absolute inset-0 flex items-center justify-center">
-            <Database className="w-6 h-6 text-indigo-600" />
-          </div>
-        </div>
+      <div className="h-screen w-full flex flex-col items-center justify-center bg-slate-50">
+        <div className="w-16 h-16 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin"></div>
         <p className="text-slate-600 font-bold mt-6 tracking-tight">ZILL CRM</p>
-        <p className="text-slate-400 text-sm mt-1 animate-pulse">Initializing intelligent cloud environment...</p>
       </div>
     );
   }
 
   if (!isAuthenticated) return <Login />;
+
+  const userRole = user?.user_metadata?.role || user?.role;
 
   const handleAdd = (type: EntityType) => {
     setActiveType(type);
@@ -382,7 +320,7 @@ const AppContent: React.FC = () => {
   };
 
   const handleDelete = (type: EntityType, id: string) => {
-    if (window.confirm('Are you sure you want to delete this item? This action cannot be undone.')) {
+    if (window.confirm('Are you sure you want to delete this item?')) {
       deleteEntity(type, id);
     }
   };
@@ -398,20 +336,14 @@ const AppContent: React.FC = () => {
     }
   };
 
-  const currentColumns = activeType ? (COLUMNS[activeType] || DEFAULT_COLUMNS) : [];
-  const currentInitialData = (activeType && editingId) ? getEntity(activeType, editingId) : undefined;
-  const modalTitle = editingId ? `Update ${activeType?.replace('-', ' ')}` : `Create ${activeType?.replace('-', ' ')}`;
-
-  const userRole = user?.user_metadata?.role || user?.role;
-
   return (
     <Router>
       <Layout>
         <Routes>
           <Route path="/" element={<Summary />} />
-          <Route path="/settings" element={<Settings />} />
+          <Route path="/settings" element={userRole === ROLES.ADMIN ? <Settings /> : <Navigate to="/" replace />} />
           {NAV_ITEMS.filter(item => item.id !== EntityType.SUMMARY && item.id !== EntityType.SETTINGS).map((item) => {
-            const hasAccess = !item.requiredRole || userRole === item.requiredRole;
+            const hasAccess = item.allowedRoles?.includes(userRole);
             return (
               <Route 
                 key={item.id} 
@@ -435,10 +367,10 @@ const AppContent: React.FC = () => {
           })}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-        <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={modalTitle}>
+        <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={editingId ? `Update ${activeType}` : `Create ${activeType}`}>
           <EntityForm 
-            columns={currentColumns} 
-            initialData={currentInitialData} 
+            columns={activeType ? (COLUMNS[activeType] || DEFAULT_COLUMNS) : []} 
+            initialData={(activeType && editingId) ? getEntity(activeType, editingId) : undefined} 
             onSubmit={handleFormSubmit} 
             onCancel={() => setModalOpen(false)} 
             entityType={activeType || undefined} 
@@ -449,14 +381,12 @@ const AppContent: React.FC = () => {
   );
 };
 
-const App: React.FC = () => {
-  return (
-    <AuthProvider>
-      <DataProvider>
-        <AppContent />
-      </DataProvider>
-    </AuthProvider>
-  );
-};
+const App: React.FC = () => (
+  <AuthProvider>
+    <DataProvider>
+      <AppContent />
+    </DataProvider>
+  </AuthProvider>
+);
 
 export default App;

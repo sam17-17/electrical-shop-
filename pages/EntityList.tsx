@@ -13,6 +13,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Modal } from '../components/Modal';
 import { PaymentModal } from '../components/PaymentModal';
 import { useData } from '../context/DataContext';
+import { useAuth } from '../context/AuthContext';
 
 interface EntityListProps {
   title: string;
@@ -32,10 +33,14 @@ export const EntityList: React.FC<EntityListProps> = ({
   onDelete 
 }) => {
   const { updateEntity } = useData();
+  const { user } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const currentPath = location.pathname.substring(1) as EntityType;
   
+  const userRole = user?.user_metadata?.role || user?.role;
+  const isReadOnly = userRole === 'Viewer';
+
   const [viewingItem, setViewingItem] = useState<GenericEntity | null>(null);
   const [paymentItem, setPaymentItem] = useState<GenericEntity | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -172,14 +177,6 @@ export const EntityList: React.FC<EntityListProps> = ({
         startY = (doc as any).lastAutoTable.finalY + 15;
     }
 
-    if (item.description) {
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'bold');
-      doc.text("REMARKS:", 14, startY);
-      doc.setFont('helvetica', 'normal');
-      doc.text(doc.splitTextToSize(item.description, 180), 14, startY + 6);
-    }
-
     const pageHeight = doc.internal.pageSize.height || 297;
     doc.setDrawColor(226, 232, 240);
     doc.line(14, pageHeight - 15, 196, pageHeight - 15);
@@ -218,6 +215,7 @@ export const EntityList: React.FC<EntityListProps> = ({
   };
 
   const handleBulkUpdate = async (patch: Partial<GenericEntity>) => {
+    if (isReadOnly) return;
     setIsBulkActionLoading(true);
     try {
       const promises = Array.from(selectedIds).map(id => updateEntity(currentPath, id, patch));
@@ -231,7 +229,7 @@ export const EntityList: React.FC<EntityListProps> = ({
   };
 
   const renderBulkActions = () => {
-    if (currentPath !== EntityType.SYSTEM_USERS || selectedIds.size === 0) return null;
+    if (currentPath !== EntityType.SYSTEM_USERS || selectedIds.size === 0 || isReadOnly) return null;
 
     return (
       <div className="flex flex-wrap items-center gap-3 bg-indigo-50 border border-indigo-100 p-3 rounded-xl animate-fade-in mb-4 shadow-sm">
@@ -290,7 +288,6 @@ export const EntityList: React.FC<EntityListProps> = ({
                 </div>
              </div>
              <p className="text-slate-900 font-extrabold tracking-tight">Synchronizing Bulk Updates</p>
-             <p className="text-slate-500 text-xs mt-1">Applying structural changes to the database pool...</p>
            </div>
         </div>
       )}
@@ -299,7 +296,7 @@ export const EntityList: React.FC<EntityListProps> = ({
         <div className="flex items-center gap-4 min-w-0">
           <button 
             onClick={() => navigate('/')} 
-            className="p-2.5 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-500 transition-all hover:shadow-sm shrink-0"
+            className="p-2.5 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-500 transition-all shrink-0"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
@@ -310,17 +307,19 @@ export const EntityList: React.FC<EntityListProps> = ({
             </p>
           </div>
         </div>
-        <div className="flex gap-2 sm:gap-3 w-full md:w-auto shrink-0">
-          <button className="flex-1 md:flex-none px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-bold flex items-center justify-center hover:bg-slate-50 transition-all">
-            <Filter className="w-4 h-4 mr-2" />Filter
-          </button>
-          <button 
-            onClick={onAdd} 
-            className="flex-1 md:flex-none px-4 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-bold flex items-center justify-center shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all hover:-translate-y-0.5 active:translate-y-0"
-          >
-            <Plus className="w-4 h-4 mr-2" />New Entry
-          </button>
-        </div>
+        {!isReadOnly && (
+          <div className="flex gap-2 sm:gap-3 w-full md:w-auto shrink-0">
+            <button className="flex-1 md:flex-none px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-bold flex items-center justify-center hover:bg-slate-50 transition-all">
+              <Filter className="w-4 h-4 mr-2" />Filter
+            </button>
+            <button 
+              onClick={onAdd} 
+              className="flex-1 md:flex-none px-4 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-bold flex items-center justify-center shadow-lg hover:bg-indigo-700 transition-all"
+            >
+              <Plus className="w-4 h-4 mr-2" />New Entry
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="relative group">
@@ -331,7 +330,7 @@ export const EntityList: React.FC<EntityListProps> = ({
             type="text" 
             value={searchTerm} 
             onChange={(e) => setSearchTerm(e.target.value)} 
-            className="block w-full pl-12 pr-4 py-3 sm:py-3.5 bg-white border border-slate-200 rounded-2xl text-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all shadow-sm placeholder:text-slate-400 placeholder:font-medium" 
+            className="block w-full pl-12 pr-4 py-3 sm:py-3.5 bg-white border border-slate-200 rounded-2xl text-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all shadow-sm placeholder:text-slate-400" 
             placeholder={`Search across ${data.length} records in ${title.toLowerCase()}...`} 
         />
       </div>
@@ -344,16 +343,15 @@ export const EntityList: React.FC<EntityListProps> = ({
             <thead>
               <tr className="bg-slate-50/50 border-b border-slate-100">
                 <th className="px-6 py-4 w-14">
-                   <button 
-                     onClick={toggleSelectAll} 
-                     className="text-slate-300 hover:text-indigo-600 transition-colors p-1"
-                   >
-                      {selectedIds.size === filteredData.length && filteredData.length > 0 ? (
-                        <CheckSquare className="w-5 h-5 text-indigo-600" />
-                      ) : (
-                        <Square className="w-5 h-5" />
-                      )}
-                   </button>
+                   {!isReadOnly && (
+                     <button onClick={toggleSelectAll} className="text-slate-300 hover:text-indigo-600 transition-colors p-1">
+                        {selectedIds.size === filteredData.length && filteredData.length > 0 ? (
+                          <CheckSquare className="w-5 h-5 text-indigo-600" />
+                        ) : (
+                          <Square className="w-5 h-5" />
+                        )}
+                     </button>
+                   )}
                 </th>
                 {columns.map((col) => col.type !== 'items' && (
                     <th key={col.key} className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">
@@ -366,28 +364,21 @@ export const EntityList: React.FC<EntityListProps> = ({
             <tbody className="divide-y divide-slate-50">
               {filteredData.length === 0 ? (
                 <tr>
-                    <td colSpan={columns.length + 2} className="px-6 py-20 text-center">
-                        <div className="flex flex-col items-center opacity-40">
-                            <Search className="w-12 h-12 mb-3 text-slate-300" />
-                            <p className="text-slate-500 font-bold text-sm">No records found matching your criteria</p>
-                            <p className="text-slate-400 text-xs mt-1">Try adjusting your filters or search terms</p>
-                        </div>
-                    </td>
+                    <td colSpan={columns.length + 2} className="px-6 py-20 text-center text-slate-400 italic">No records found matching your search.</td>
                 </tr>
               ) : (
                 filteredData.map((item) => (
                   <tr key={item.id} className={`hover:bg-slate-50/50 transition-colors group ${selectedIds.has(item.id) ? 'bg-indigo-50/40' : ''}`}>
                     <td className="px-6 py-4">
-                       <button 
-                         onClick={() => toggleSelectOne(item.id)} 
-                         className="text-slate-300 hover:text-indigo-600 transition-colors p-1"
-                       >
-                          {selectedIds.has(item.id) ? (
-                            <CheckSquare className="w-5 h-5 text-indigo-600" />
-                          ) : (
-                            <Square className="w-5 h-5" />
-                          )}
-                       </button>
+                       {!isReadOnly && (
+                         <button onClick={() => toggleSelectOne(item.id)} className="text-slate-300 hover:text-indigo-600 transition-colors p-1">
+                            {selectedIds.has(item.id) ? (
+                              <CheckSquare className="w-5 h-5 text-indigo-600" />
+                            ) : (
+                              <Square className="w-5 h-5" />
+                            )}
+                         </button>
+                       )}
                     </td>
                     {columns.map((col) => col.type !== 'items' && (
                         <td key={col.key} className="px-6 py-4 text-sm font-semibold text-slate-700 whitespace-nowrap">
@@ -396,11 +387,15 @@ export const EntityList: React.FC<EntityListProps> = ({
                     ))}
                     <td className="px-6 py-4 text-right whitespace-nowrap sticky right-0 bg-white group-hover:bg-slate-50/50 transition-colors">
                       <div className="flex justify-end gap-1 sm:gap-2">
-                        <button onClick={() => setViewingItem(item)} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all" title="View Detail"><Eye className="w-4.5 h-4.5" /></button>
-                        {currentPath === EntityType.SALES_INVOICES && item.status !== 'Paid' && <button onClick={() => setPaymentItem(item)} className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all" title="Record Receipt"><Wallet className="w-4.5 h-4.5" /></button>}
-                        <button onClick={() => handleDownloadPDF(item)} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all" title="Export PDF"><FileDown className="w-4.5 h-4.5" /></button>
-                        <button onClick={() => onEdit(item.id)} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all" title="Modify Entry"><Edit2 className="w-4.5 h-4.5" /></button>
-                        <button onClick={() => onDelete(item.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all" title="Remove Entry"><Trash2 className="w-4.5 h-4.5" /></button>
+                        <button onClick={() => setViewingItem(item)} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"><Eye className="w-4.5 h-4.5" /></button>
+                        {!isReadOnly && (
+                          <>
+                            {currentPath === EntityType.SALES_INVOICES && item.status !== 'Paid' && <button onClick={() => setPaymentItem(item)} className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"><Wallet className="w-4.5 h-4.5" /></button>}
+                            <button onClick={() => handleDownloadPDF(item)} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"><FileDown className="w-4.5 h-4.5" /></button>
+                            <button onClick={() => onEdit(item.id)} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"><Edit2 className="w-4.5 h-4.5" /></button>
+                            <button onClick={() => onDelete(item.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"><Trash2 className="w-4.5 h-4.5" /></button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -418,12 +413,14 @@ export const EntityList: React.FC<EntityListProps> = ({
                 <p className="text-[10px] text-slate-400 uppercase font-black tracking-widest mb-1">Audit Reference</p>
                 <p className="text-xl font-black text-slate-800 tracking-tight">{viewingItem.id}</p>
             </div>
-            <button 
-                onClick={() => handleDownloadPDF(viewingItem)} 
-                className="w-full sm:w-auto px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all"
-            >
-                Generate Document
-            </button>
+            {!isReadOnly && (
+              <button 
+                  onClick={() => handleDownloadPDF(viewingItem)} 
+                  className="w-full sm:w-auto px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-bold shadow-lg hover:bg-indigo-700 transition-all"
+              >
+                  Generate Document
+              </button>
+            )}
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {columns.filter(c => c.type !== 'items' && c.key !== 'id').map(c => (
@@ -435,35 +432,6 @@ export const EntityList: React.FC<EntityListProps> = ({
               </div>
             ))}
           </div>
-          {viewingItem.items && viewingItem.items.length > 0 && (
-            <div className="animate-fade-in">
-                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 px-1">Inventory & Services Payload</h4>
-                <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-                    <div className="overflow-x-auto no-scrollbar">
-                        <table className="w-full text-xs text-left">
-                            <thead className="bg-slate-50/50 border-b border-slate-100">
-                                <tr>
-                                    <th className="px-4 py-3 text-slate-400 font-bold uppercase">Product / Task</th>
-                                    <th className="px-4 py-3 text-center text-slate-400 font-bold uppercase">Qty</th>
-                                    <th className="px-4 py-3 text-right text-slate-400 font-bold uppercase">Rate</th>
-                                    <th className="px-4 py-3 text-right text-slate-400 font-bold uppercase">Total</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                                {viewingItem.items.map((i: any, idx: number) => (
-                                    <tr key={idx} className="bg-white hover:bg-slate-50/30 transition-colors">
-                                        <td className="px-4 py-3 text-slate-800 font-bold">{i.description}</td>
-                                        <td className="px-4 py-3 text-center font-bold text-slate-600">{i.quantity}</td>
-                                        <td className="px-4 py-3 text-right text-slate-600">{renderCell(i.unitPrice, 'currency', 'price')}</td>
-                                        <td className="px-4 py-3 text-right font-black text-slate-900">{renderCell(i.total, 'currency', 'total')}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-          )}
         </div>}
       </Modal>
 
