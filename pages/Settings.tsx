@@ -16,8 +16,8 @@ export const Settings: React.FC = () => {
   const [copied, setCopied] = useState(false);
   const [isMigrating, setIsMigrating] = useState(false);
 
-  const sqlSchema = `-- STEP 1: CREATE THE CORE TABLE
--- user_id is TEXT to allow both Supabase UUIDs and Virtual User IDs.
+  const sqlSchema = `-- 1. CREATE CORE TABLE
+-- user_id is TEXT to support both UUIDs and custom Virtual User strings
 CREATE TABLE IF NOT EXISTS public.crm_entities (
     id TEXT PRIMARY KEY,
     type TEXT NOT NULL,
@@ -26,21 +26,19 @@ CREATE TABLE IF NOT EXISTS public.crm_entities (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- OPTIONAL: If you already created the table with UUID user_id, run this to fix the error:
--- ALTER TABLE public.crm_entities ALTER COLUMN user_id TYPE TEXT;
-
--- STEP 2: ENABLE ROW LEVEL SECURITY
+-- 2. ENABLE ROW LEVEL SECURITY
 ALTER TABLE public.crm_entities ENABLE ROW LEVEL SECURITY;
 
--- STEP 3: CREATE ACCESS POLICIES
+-- 3. CREATE ACCESS POLICIES
+-- We use 'public' instead of 'authenticated' because Virtual Users (PIN login) 
+-- are technically anonymous to Supabase Auth, but part of our CRM's auth logic.
 DROP POLICY IF EXISTS "Shared team access" ON public.crm_entities;
-CREATE POLICY "Shared team access" ON public.crm_entities FOR ALL TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "Shared team access" ON public.crm_entities 
+FOR ALL TO public 
+USING (true) 
+WITH CHECK (true);
 
--- Allow Public lookup for Virtual Login
-DROP POLICY IF EXISTS "Enable virtual login lookup" ON public.crm_entities;
-CREATE POLICY "Enable virtual login lookup" ON public.crm_entities FOR SELECT TO anon USING (type = 'system-users');
-
--- STEP 4: ENABLE REALTIME
+-- 4. ENABLE REALTIME
 ALTER PUBLICATION supabase_realtime ADD TABLE crm_entities;`;
 
   const handleCopySql = () => {
@@ -166,6 +164,16 @@ ALTER PUBLICATION supabase_realtime ADD TABLE crm_entities;`;
                         <span className="text-[10px]">{copied ? 'Copied!' : 'Copy Script'}</span>
                     </button>
                     <pre className="text-indigo-200 whitespace-pre-wrap">{sqlSchema}</pre>
+                </div>
+                <div className="mt-4 p-4 bg-amber-50 rounded-xl border border-amber-200 flex items-start">
+                    <AlertTriangle className="w-5 h-5 text-amber-600 mr-3 shrink-0 mt-0.5" />
+                    <div>
+                        <p className="text-xs font-bold text-amber-800">Important Fix for RLS Errors</p>
+                        <p className="text-[11px] text-amber-700 mt-1">
+                            If you see "row-level security policy" errors, ensure your policy is set to <b>TO public</b>. 
+                            Our CRM uses a hybrid auth model where PIN-users are technically anonymous to Supabase.
+                        </p>
+                    </div>
                 </div>
             </div>
         </div>

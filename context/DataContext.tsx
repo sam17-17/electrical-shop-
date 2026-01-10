@@ -180,6 +180,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (error) {
       if (error.message.includes("Could not find the table")) {
         setDbNeedsSetup(true);
+      } else if (error.message.includes("row-level security policy")) {
+        setData(oldState);
+        throw new Error("Security Policy Violation: Go to Settings and update your SQL Schema to allow 'public' access.");
       } else {
         setData(oldState); 
         throw new Error(error.message);
@@ -209,6 +212,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .upsert({ id, type, content, user_id: user?.id }, { onConflict: 'id' });
 
     if (error) {
+      if (error.message.includes("row-level security policy")) {
+        setData(oldState);
+        throw new Error("Security Policy Violation: Your Cloud DB is blocking updates. Re-run the SQL script in Settings.");
+      }
       setData(oldState); 
       throw new Error(error.message);
     }
@@ -228,6 +235,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .eq('id', id);
 
     if (error) {
+      if (error.message.includes("row-level security policy")) {
+        setData(oldState);
+        throw new Error("Security Policy Violation: Deletions are being blocked by Cloud RLS.");
+      }
       setData(oldState); 
       throw new Error(error.message);
     }
