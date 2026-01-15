@@ -188,7 +188,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
              <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shrink-0">
                <span className="text-white">Z</span>
              </div>
-             <span className="truncate">ZILL</span>
+             <span className="truncate">Zill Tech</span>
           </div>
           <button onClick={() => setSidebarOpen(false)} className="lg:hidden p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 transition-colors"><X className="w-5 h-5" /></button>
         </div>
@@ -232,7 +232,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
               <Menu className="w-5 h-5" />
             </button>
              <div className="flex items-center text-sm text-slate-500 overflow-hidden">
-              <span className="hidden sm:inline">ZILL CRM</span>
+              <span className="hidden sm:inline">Zill Tech Solution</span>
               <ChevronRight className="w-4 h-4 mx-2 hidden sm:inline" />
               <span className="font-semibold text-slate-800 capitalize truncate">{location.pathname === '/' ? 'Summary' : location.pathname.substring(1).replace('-', ' ')}</span>
              </div>

@@ -18,7 +18,7 @@ export const generateResponse = async (
     
     if (contextData) {
       fullPrompt = `
-      You are a helpful CRM assistant for a company called "ZILL CRM". 
+      You are a helpful CRM assistant for a company called "Zill Tech Solution". 
       The user is currently viewing the following data on their screen:
       ${contextData}
 

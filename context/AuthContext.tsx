@@ -86,7 +86,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (username: string, password: string) => {
     // 1. Check Local Demo Admin
     if (username === 'admin' && password === '1234') {
-      const mockUser = { id: BOOTSTRAP_DEMO_ADMIN_ID, email: 'admin@zill.com', username: 'Local Admin', role: 'Admin', isDemo: true };
+      const mockUser = { id: BOOTSTRAP_DEMO_ADMIN_ID, email: 'admin@zilltech.com', username: 'Local Admin', role: 'Admin', isDemo: true };
       setUser(mockUser);
       setIsDemoMode(true);
       localStorage.setItem('zill_active_user', JSON.stringify(mockUser));
@@ -94,11 +94,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     // 2. CHECK FOR SUPER ADMIN BOOTSTRAP (Allows setup when DB table is missing)
-    const isBootstrap = (username === 'superadmin' || username === 'superadmin@zill.com') && password === 'admin2025';
+    const isBootstrap = (username === 'superadmin' || username === 'superadmin@zilltech.com') && password === 'admin2025';
 
     if (!supabase) {
         if (isBootstrap) {
-            const superUser = { id: BOOTSTRAP_SUPER_ADMIN_ID, email: 'superadmin@zill.com', username: 'Super Admin', role: 'Admin', isDemo: true };
+            const superUser = { id: BOOTSTRAP_SUPER_ADMIN_ID, email: 'superadmin@zilltech.com', username: 'Super Admin', role: 'Admin', isDemo: true };
             setUser(superUser);
             setIsDemoMode(true);
             localStorage.setItem('zill_active_user', JSON.stringify(superUser));
@@ -117,7 +117,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (isBootstrap && (vError || !virtualUsers || virtualUsers.length === 0)) {
           const cloudAdmin = { 
             id: BOOTSTRAP_SUPER_ADMIN_ID, 
-            email: 'superadmin@zill.com', 
+            email: 'superadmin@zilltech.com', 
             username: 'Super Admin', 
             role: 'Admin', 
             isVirtual: true, 
@@ -129,7 +129,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 await supabase.from('crm_entities').insert([{
                    id: BOOTSTRAP_SUPER_ADMIN_ID,
                    type: 'system-users',
-                   content: { name: 'Super Admin', email: 'superadmin@zill.com', pin: 'admin2025', role: 'Admin', status: 'Active' }
+                   content: { name: 'Super Admin', email: 'superadmin@zilltech.com', pin: 'admin2025', role: 'Admin', status: 'Active' }
                 }]);
              } catch(e) {}
           }
