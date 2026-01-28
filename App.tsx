@@ -7,10 +7,11 @@ import {
   Briefcase, Receipt, Layers, Folder, UserCheck, BookOpen, 
   PieChart, Settings as SettingsIcon, Menu, X, ChevronRight,
   ClipboardList, StickyNote, LogOut, Database, Cloud, CloudOff, ShieldCheck,
-  AlertTriangle, ArrowRight, RefreshCw, Zap, HelpCircle
+  AlertTriangle, ArrowRight, RefreshCw, Zap, HelpCircle, Scale, CreditCard
 } from 'lucide-react';
 import { EntityType, NavItem, DataColumn } from './types';
 import { Summary } from './pages/Summary';
+import { BalanceSheet } from './pages/BalanceSheet';
 import { EntityList } from './pages/EntityList';
 import { Settings } from './pages/Settings';
 import { Login } from './pages/Login';
@@ -99,6 +100,13 @@ const COLUMNS: Record<string, DataColumn[]> = {
     { key: 'amount', label: 'Total Amount', type: 'currency', required: true },
     { key: 'status', label: 'Status', type: 'status', options: ['Draft', 'Received', 'Paid', 'Unpaid'], required: true },
   ],
+  [EntityType.EXPENSES]: [
+    { key: 'payee', label: 'Payee', type: 'text', required: true },
+    { key: 'category', label: 'Category', type: 'select', options: ['Utilities', 'Rent', 'Salaries', 'Marketing', 'Office Supplies', 'Other'], required: true },
+    { key: 'date', label: 'Payment Date', type: 'date', required: true },
+    { key: 'amount', label: 'Amount', type: 'currency', required: true },
+    { key: 'status', label: 'Status', type: 'status', options: ['Unpaid', 'Paid'], required: true },
+  ],
   [EntityType.EMPLOYEES]: [
     { key: 'name', label: 'Full Name', type: 'text', required: true },
     { key: 'role', label: 'Job Title', type: 'text', required: true },
@@ -146,6 +154,7 @@ const FINANCE_ROLES = [ROLES.ADMIN, ROLES.MANAGER, ROLES.ACCOUNTANT];
 
 const NAV_ITEMS: NavItem[] = [
   { id: EntityType.SUMMARY, label: 'Summary', icon: LayoutDashboard, allowedRoles: ALL_ROLES },
+  { id: EntityType.BALANCE_SHEET, label: 'Balance Sheet', icon: Scale, allowedRoles: FINANCE_ROLES },
   { id: EntityType.BANK_CASH, label: 'Bank & Cash Accounts', icon: Wallet, allowedRoles: FINANCE_ROLES },
   { id: EntityType.CUSTOMERS, label: 'Customers', icon: Users, group: 'Sales', allowedRoles: OPS_ROLES },
   { id: EntityType.SALES_QUOTES, label: 'Sales Quotes', icon: FileText, group: 'Sales', allowedRoles: OPS_ROLES },
@@ -157,6 +166,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: EntityType.PURCHASE_QUOTES, label: 'Purchase Quotes', icon: ClipboardList, group: 'Purchases', allowedRoles: FINANCE_ROLES },
   { id: EntityType.PURCHASE_ORDERS, label: 'Purchase Orders', icon: StickyNote, group: 'Purchases', allowedRoles: FINANCE_ROLES },
   { id: EntityType.PURCHASE_INVOICES, label: 'Purchase Invoices', icon: Receipt, group: 'Purchases', allowedRoles: FINANCE_ROLES },
+  { id: EntityType.EXPENSES, label: 'Expenses', icon: CreditCard, group: 'Purchases', allowedRoles: FINANCE_ROLES },
   { id: EntityType.INVENTORY, label: 'Products & Services', icon: Layers, group: 'Operations', allowedRoles: [...OPS_ROLES, ROLES.ACCOUNTANT] },
   { id: EntityType.EMPLOYEES, label: 'Employees', icon: UserCheck, group: 'Administration', allowedRoles: [ROLES.ADMIN, ROLES.MANAGER] },
   { id: EntityType.JOURNAL, label: 'Journal Entries', icon: BookOpen, allowedRoles: [ROLES.ADMIN, ROLES.ACCOUNTANT] },
@@ -287,7 +297,7 @@ const AppContent: React.FC = () => {
 
   const userRole = user?.user_metadata?.role || user?.role;
   
-  const dedicatedRoutes = [EntityType.SUMMARY, EntityType.SETTINGS, EntityType.HOW_TO_USE];
+  const dedicatedRoutes = [EntityType.SUMMARY, EntityType.SETTINGS, EntityType.HOW_TO_USE, EntityType.BALANCE_SHEET];
 
   const handleFormSubmit = async (formData: any) => {
     if (!activeType) return;
@@ -315,6 +325,8 @@ const AppContent: React.FC = () => {
           <Route path="/" element={<Summary />} />
           <Route path="/how-to-use" element={<HowToUse />} />
           <Route path="/settings" element={userRole === ROLES.ADMIN ? <Settings /> : <Navigate to="/" replace />} />
+          <Route path="/balance-sheet" element={FINANCE_ROLES.includes(userRole) ? <BalanceSheet /> : <Navigate to="/" replace />} />
+
           {NAV_ITEMS.filter(item => !dedicatedRoutes.includes(item.id)).map((item) => (
             <Route key={item.id} path={`/${item.id}`} element={
               (!item.allowedRoles || item.allowedRoles.includes(userRole)) ? (

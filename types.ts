@@ -1,6 +1,7 @@
 
 export enum EntityType {
   SUMMARY = 'summary',
+  BALANCE_SHEET = 'balance-sheet',
   BANK_CASH = 'bank-cash',
   CUSTOMERS = 'customers',
   SALES_QUOTES = 'sales-quotes',
@@ -11,6 +12,7 @@ export enum EntityType {
   PURCHASE_QUOTES = 'purchase-quotes',
   PURCHASE_ORDERS = 'purchase-orders',
   PURCHASE_INVOICES = 'purchase-invoices',
+  EXPENSES = 'expenses',
   INVENTORY = 'inventory',
   PROJECTS = 'projects',
   EMPLOYEES = 'employees',

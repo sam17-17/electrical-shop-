@@ -295,7 +295,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const prefixMap: Record<string, string> = {
         [EntityType.SALES_ORDERS]: 'ORD-',
         [EntityType.DELIVERY_NOTES]: 'DEL-',
-        [EntityType.SALES_INVOICES]: 'INV-'
+        [EntityType.SALES_INVOICES]: 'INV-',
+        [EntityType.EXPENSES]: 'EXP-'
     };
 
     const prefix = prefixMap[targetType] || 'DOC-';
