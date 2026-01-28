@@ -298,6 +298,16 @@ const AppContent: React.FC = () => {
     } catch (e: any) { alert(`Operation failed: ${e.message}`); }
   };
 
+  const handleDelete = async (type: EntityType, id: string) => {
+    if (window.confirm('Are you sure you want to permanently delete this item? This action cannot be undone.')) {
+        try {
+            await deleteEntity(type, id);
+        } catch (e: any) {
+            alert(`Error: Could not delete record. The server responded with: ${e.message}`);
+        }
+    }
+  };
+
   return (
     <Router>
       <Layout>
@@ -311,7 +321,7 @@ const AppContent: React.FC = () => {
                 <EntityList title={item.label} columns={COLUMNS[item.id] || DEFAULT_COLUMNS} data={data[item.id] || []} 
                   onAdd={() => { setActiveType(item.id); setEditingId(null); setModalOpen(true); }}
                   onEdit={(id) => { setActiveType(item.id); setEditingId(id); setModalOpen(true); }}
-                  onDelete={(id) => { if(window.confirm('Delete this item?')) deleteEntity(item.id, id); }}
+                  onDelete={(id) => handleDelete(item.id, id)}
                 />
               ) : <Navigate to="/" replace />
             } />
