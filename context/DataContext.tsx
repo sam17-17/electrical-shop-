@@ -60,6 +60,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   
   const isFetching = useRef(false);
   const autoSyncDone = useRef(false);
+  const pendingInserts = useRef(new Set<string>());
   const supabase = getSupabase();
 
   const loadLocalData = useCallback(() => {
@@ -155,6 +156,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const handleRealtimeChange = useCallback((payload: any) => {
     const { eventType, new: newRecord, old: oldRecord } = payload;
     
+    // If this is an echo of our own optimistic insert, ignore it and finalize.
+    if (eventType === 'INSERT' && pendingInserts.current.has(newRecord.id)) {
+        pendingInserts.current.delete(newRecord.id);
+        return;
+    }
+    
     setData(prev => {
       const type = (newRecord?.type || oldRecord?.type) as EntityType;
       if (!type || !prev[type]) return prev;
@@ -207,11 +214,28 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const oldState = data;
     const newState = { ...data, [type]: [...data[type], newEntity] };
     
+    pendingInserts.current.add(id);
+
     setData(newState);
     saveLocalData(newState);
-    if (isDemoMode || !supabase || dbNeedsSetup) return;
-    const { error } = await supabase.from('crm_entities').upsert([{ id, type, content: { ...entity }, user_id: user?.id }], { onConflict: 'id' });
-    if (error) { setData(oldState); throw new Error(error.message); }
+    
+    if (isDemoMode || !supabase || dbNeedsSetup) {
+      setTimeout(() => pendingInserts.current.delete(id), 500);
+      return;
+    }
+
+    const contentData = { ...entity };
+    delete (contentData as any).id;
+
+    const { error } = await supabase.from('crm_entities').upsert([{ id, type, content: contentData, user_id: user?.id }], { onConflict: 'id' });
+    
+    if (error) { 
+      setData(oldState); 
+      pendingInserts.current.delete(id);
+      throw new Error(error.message); 
+    }
+    // Fallback to clear pending status if realtime fails
+    setTimeout(() => pendingInserts.current.delete(id), 5000);
   };
 
   const updateEntity = async (type: EntityType, id: string, entity: Partial<GenericEntity>) => {
@@ -246,7 +270,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setData(newState);
     saveLocalData(newState);
     if (isDemoMode || !supabase || dbNeedsSetup) return;
-    const { error } = await supabase.from('crm_entities').upsert({ id, type, content: { ...updatedEntity }, user_id: user?.id }, { onConflict: 'id' });
+    
+    const contentData = { ...updatedEntity };
+    delete (contentData as any).id;
+    
+    const { error } = await supabase.from('crm_entities').upsert([{ id, type, content: contentData, user_id: user?.id }], { onConflict: 'id' });
     if (error) { setData(oldState); throw new Error(error.message); }
   };
 

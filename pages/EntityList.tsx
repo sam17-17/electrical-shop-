@@ -73,8 +73,7 @@ export const EntityList: React.FC<EntityListProps> = ({
     const primaryColor = '#4f46e5';
     const secondaryColor = '#0f172a';
     const accentColor = '#64748b';
-    const lineHeight = 5;
-    const sectionGap = 10;
+    const sectionGap = 8;
     let cursorY = 20;
 
     // --- HEADER ---
@@ -86,16 +85,19 @@ export const EntityList: React.FC<EntityListProps> = ({
     doc.setFontSize(18);
     doc.setTextColor(secondaryColor);
     doc.text("ZILL TECH ENGINEERING SOLUTION LTD", textLeftMargin, cursorY);
-    cursorY += 8;
+    cursorY += 9;
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
     doc.setTextColor(accentColor);
-    doc.text("Building Tomorrow – Engineering Made Simple, Innovation in Motion", textLeftMargin, cursorY);
-    cursorY += sectionGap;
+    const subtitle = "Building Tomorrow – Engineering Made Simple, Innovation in Motion";
+    const subtitleLines = doc.splitTextToSize(subtitle, rightMargin - textLeftMargin);
+    doc.text(subtitleLines, textLeftMargin, cursorY);
+    cursorY += (subtitleLines.length * 4) + 2;
+
     doc.setFontSize(9);
     doc.setTextColor(secondaryColor);
     doc.text("Tel: 0712 809 616 / 0703 535 558", textLeftMargin, cursorY);
-    cursorY += lineHeight;
+    cursorY += 6;
     doc.text("Email: zilltech@outlook.com", textLeftMargin, cursorY);
     const leftHeaderYEnd = cursorY > 50 ? cursorY : 55;
 
@@ -115,7 +117,7 @@ export const EntityList: React.FC<EntityListProps> = ({
     doc.setFontSize(10);
     doc.setTextColor(secondaryColor);
     doc.text(`${docTitle} #: ${item.docRef || item.id || 'N/A'}`, rightMargin, rightHeaderY, { align: 'right' });
-    rightHeaderY += lineHeight;
+    rightHeaderY += 7;
     const itemDate = item.date ? new Date(item.date).toLocaleDateString() : new Date().toLocaleDateString();
     doc.text(`Date: ${itemDate}`, rightMargin, rightHeaderY, { align: 'right' });
     rightHeaderY += 7;
@@ -126,7 +128,7 @@ export const EntityList: React.FC<EntityListProps> = ({
         doc.text(`Status: ${item.status.toUpperCase()}`, rightMargin, rightHeaderY, { align: 'right' });
     }
     
-    cursorY = Math.max(leftHeaderYEnd, rightHeaderY) + sectionGap;
+    cursorY = Math.max(leftHeaderYEnd, rightHeaderY) + sectionGap + 5;
 
     doc.setDrawColor(226, 232, 240);
     doc.setLineWidth(0.5);
@@ -142,12 +144,15 @@ export const EntityList: React.FC<EntityListProps> = ({
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(11);
     doc.setTextColor(secondaryColor);
-    doc.text(item.customer || item.supplier || "Walk-in Customer", leftMargin, cursorY);
-    cursorY += 6;
+    const customerName = item.customer || item.supplier || "Walk-in Customer";
+    const customerLines = doc.splitTextToSize(customerName, (pageWidth / 2) - leftMargin);
+    doc.text(customerLines, leftMargin, cursorY);
+    cursorY += customerLines.length * 6;
+    
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
-    if (item.phone) { doc.text(`Contact: ${item.phone}`, leftMargin, cursorY); cursorY += lineHeight; }
-    if (item.email) { doc.text(`Email: ${item.email}`, leftMargin, cursorY); cursorY += lineHeight; }
+    if (item.phone) { doc.text(`Contact: ${item.phone}`, leftMargin, cursorY); cursorY += 6; }
+    if (item.email) { doc.text(`Email: ${item.email}`, leftMargin, cursorY); cursorY += 6; }
     cursorY += 6;
 
     // --- LINE ITEMS TABLE ---
@@ -175,7 +180,7 @@ export const EntityList: React.FC<EntityListProps> = ({
     cursorY = (doc as any).lastAutoTable.finalY;
 
     // --- SUMMARY & TOTALS ---
-    const neededSpace = 85; // totals height + footer height
+    const neededSpace = 85;
     if (cursorY + neededSpace > pageHeight) {
         doc.addPage();
         cursorY = 20;
@@ -185,22 +190,24 @@ export const EntityList: React.FC<EntityListProps> = ({
         cursorY += sectionGap;
         const subTotal = (item.items || []).reduce((sum: number, i: LineItem) => sum + (i.total || 0), 0);
         const vat = subTotal * 0.18;
-        const grandTotal = subTotal + vat;
+        const grandTotal = item.amount || (subTotal + vat);
 
         const totalsY = cursorY;
+        const totalBoxHeight = 32;
+        const lineItemHeight = 8;
         doc.setFillColor(248, 250, 252);
-        doc.rect(130, totalsY, 66, 32, 'F');
+        doc.rect(130, totalsY, 66, totalBoxHeight, 'F');
         doc.setFontSize(9);
         doc.setTextColor(accentColor);
-        doc.text("Subtotal:", 135, totalsY + 8);
-        doc.text(currencyFormatter.format(subTotal), 191, totalsY + 8, { align: 'right' });
-        doc.text("VAT (18%):", 135, totalsY + 16);
-        doc.text(currencyFormatter.format(vat), 191, totalsY + 16, { align: 'right' });
+        doc.text("Subtotal:", 135, totalsY + lineItemHeight);
+        doc.text(currencyFormatter.format(subTotal), 191, totalsY + lineItemHeight, { align: 'right' });
+        doc.text("VAT (18%):", 135, totalsY + (lineItemHeight * 2));
+        doc.text(currencyFormatter.format(vat), 191, totalsY + (lineItemHeight * 2), { align: 'right' });
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(12);
         doc.setTextColor(primaryColor);
-        doc.text("GRAND TOTAL:", 135, totalsY + 26);
-        doc.text(currencyFormatter.format(grandTotal), 191, totalsY + 26, { align: 'right' });
+        doc.text("GRAND TOTAL:", 135, totalsY + (lineItemHeight * 3) + 2);
+        doc.text(currencyFormatter.format(grandTotal), 191, totalsY + (lineItemHeight * 3) + 2, { align: 'right' });
     }
 
     // --- FOOTER ---
@@ -220,9 +227,9 @@ export const EntityList: React.FC<EntityListProps> = ({
         doc.text("BANK PAYMENT DETAILS:", leftMargin, footerY + 6);
         doc.setFont('helvetica', 'normal');
         let bankY = footerY + 11;
-        doc.text("Bank Name: ZILL TECH BANK PLC", leftMargin, bankY); bankY += 4;
-        doc.text("Account Name: ZILL TECH ENGINEERING SOLUTION LTD", leftMargin, bankY); bankY += 4;
-        doc.text("Account #: 00010002000304", leftMargin, bankY); bankY += 4;
+        doc.text("Bank Name: ZILL TECH BANK PLC", leftMargin, bankY); bankY += 5;
+        doc.text("Account Name: ZILL TECH ENGINEERING SOLUTION LTD", leftMargin, bankY); bankY += 5;
+        doc.text("Account #: 00010002000304", leftMargin, bankY); bankY += 5;
         doc.text("SWIFT/IBAN: ZILLKEXXXX", leftMargin, bankY);
     }
 
