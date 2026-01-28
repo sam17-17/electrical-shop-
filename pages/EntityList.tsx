@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { DataColumn, GenericEntity, LineItem, EntityType } from '../types';
 import { 
@@ -14,6 +15,7 @@ import { Modal } from '../components/Modal';
 import { PaymentModal } from '../components/PaymentModal';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
+import { ZILL_TECH_LOGO_BASE64 } from '../assets/logo';
 
 interface EntityListProps {
   title: string;
@@ -76,27 +78,28 @@ export const EntityList: React.FC<EntityListProps> = ({
     let cursorY = 20;
 
     // --- HEADER ---
-    const leftHeaderYStart = cursorY;
+    doc.addImage(ZILL_TECH_LOGO_BASE64, 'JPEG', leftMargin, 15, 35, 35);
+    const textLeftMargin = leftMargin + 42;
+    cursorY = 20;
+
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(22);
+    doc.setFontSize(18);
     doc.setTextColor(secondaryColor);
-    doc.text("ZILL ENTERPRISE", leftMargin, cursorY);
+    doc.text("ZILL TECH ENGINEERING SOLUTION LTD", textLeftMargin, cursorY);
     cursorY += 8;
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
     doc.setTextColor(accentColor);
-    doc.text("OPERATIONAL INTELLIGENCE SYSTEMS", leftMargin, cursorY);
+    doc.text("Building Tomorrow – Engineering Made Simple, Innovation in Motion", textLeftMargin, cursorY);
     cursorY += sectionGap;
     doc.setFontSize(9);
     doc.setTextColor(secondaryColor);
-    doc.text("Plot 45, Industrial Avenue", leftMargin, cursorY);
+    doc.text("Tel: 0712 809 616 / 0703 535 558", textLeftMargin, cursorY);
     cursorY += lineHeight;
-    doc.text("Nairobi, Kenya - P.O Box 40100", leftMargin, cursorY);
-    cursorY += lineHeight;
-    doc.text("Tel: +254 700 000 000 | Email: accounts@zill.com", leftMargin, cursorY);
-    const leftHeaderYEnd = cursorY;
+    doc.text("Email: zilltech@outlook.com", textLeftMargin, cursorY);
+    const leftHeaderYEnd = cursorY > 50 ? cursorY : 55;
 
-    let rightHeaderY = leftHeaderYStart;
+    let rightHeaderY = 20;
     let docTitle = title.toUpperCase().slice(0, -1);
     if (currentPath === EntityType.SALES_ORDERS) docTitle = 'SALES ORDER';
     if (currentPath === EntityType.DELIVERY_NOTES) docTitle = 'DELIVERY NOTE';
@@ -217,8 +220,8 @@ export const EntityList: React.FC<EntityListProps> = ({
         doc.text("BANK PAYMENT DETAILS:", leftMargin, footerY + 6);
         doc.setFont('helvetica', 'normal');
         let bankY = footerY + 11;
-        doc.text("Bank Name: ZILL BANK PLC", leftMargin, bankY); bankY += 4;
-        doc.text("Account Name: ZILL ENTERPRISE LTD", leftMargin, bankY); bankY += 4;
+        doc.text("Bank Name: ZILL TECH BANK PLC", leftMargin, bankY); bankY += 4;
+        doc.text("Account Name: ZILL TECH ENGINEERING SOLUTION LTD", leftMargin, bankY); bankY += 4;
         doc.text("Account #: 00010002000304", leftMargin, bankY); bankY += 4;
         doc.text("SWIFT/IBAN: ZILLKEXXXX", leftMargin, bankY);
     }

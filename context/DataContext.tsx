@@ -192,7 +192,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const addEntity = async (type: EntityType, entity: Omit<GenericEntity, 'id'>) => {
     const id = (entity as any).id || generateUUID();
-    if (data[type].some(item => item.id === id)) return;
+    if (data[type].some(item => item.id === id)) {
+      throw new Error("Attempted to create a record with a duplicate ID. Please try again.");
+    }
 
     if (type === EntityType.CUSTOMERS || type === EntityType.SUPPLIERS) {
       const newName = (entity as any).name?.toString().toLowerCase().trim();
@@ -216,6 +218,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const currentItems = data[type];
     const target = currentItems.find(i => i.id === id);
     if (!target) return;
+    
+    if ((type === EntityType.CUSTOMERS || type === EntityType.SUPPLIERS) && entity.name) {
+      const newName = entity.name.toString().toLowerCase().trim();
+      if (currentItems.some(item => item.name?.toString().toLowerCase().trim() === newName && item.id !== id)) {
+        throw new Error(`A ${type.slice(0, -1)} with this name already exists.`);
+      }
+    }
+
     const updatedEntity = { ...target, ...entity };
     const oldState = data;
     const newState = { ...data, [type]: currentItems.map(item => item.id === id ? updatedEntity : item) };

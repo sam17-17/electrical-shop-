@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { HashRouter as Router, Routes, Route, NavLink, useLocation, Navigate, Link } from 'react-router-dom';
 import { 
@@ -18,6 +19,7 @@ import { DataProvider, useData } from './context/DataContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { Modal } from './components/Modal';
 import { EntityForm } from './components/EntityForm';
+import { ZILL_TECH_LOGO_BASE64 } from './assets/logo';
 
 // --- CONFIGURATION ---
 const CATEGORY_OPTIONS = ['Electronics', 'Services', 'Accessories', 'Software', 'Hardware'];
@@ -193,11 +195,9 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     <div className="flex h-screen bg-slate-50 overflow-hidden relative">
       <aside className={`${sidebarOpen ? 'w-64 translate-x-0' : 'w-0 -translate-x-full lg:w-20 lg:translate-x-0'} bg-slate-900 text-slate-300 transition-all duration-300 flex flex-col fixed lg:relative z-30 h-full border-r border-slate-800 shadow-xl overflow-hidden`}>
         <div className="h-16 flex items-center justify-between px-4 border-b border-slate-800 shrink-0">
-          <div className={`font-bold text-white text-xl flex items-center space-x-2 ${!sidebarOpen && 'lg:hidden'}`}>
-             <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shrink-0">
-               <span className="text-white">Z</span>
-             </div>
-             <span className="truncate">Zill Tech Solution</span>
+          <div className={`font-bold text-white text-xl flex items-center space-x-3 ${!sidebarOpen && 'lg:hidden'}`}>
+             <img src={ZILL_TECH_LOGO_BASE64} alt="Zill Tech Logo" className="w-8 h-8 rounded-lg object-cover" />
+             <span className="truncate text-base">Zill Tech Engineering</span>
           </div>
           <button onClick={() => setSidebarOpen(false)} className="lg:hidden p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 transition-colors"><X className="w-5 h-5" /></button>
         </div>
@@ -241,7 +241,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
               <Menu className="w-5 h-5" />
             </button>
              <div className="flex items-center text-sm text-slate-500 overflow-hidden">
-              <span className="hidden sm:inline">Zill Tech Solution</span>
+              <span className="hidden sm:inline">Zill Tech Engineering Solution</span>
               <ChevronRight className="w-4 h-4 mx-2 hidden sm:inline" />
               <span className="font-semibold text-slate-800 capitalize truncate">{location.pathname === '/' ? 'Summary' : location.pathname.substring(1).replace('-', ' ')}</span>
              </div>

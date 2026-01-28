@@ -1,6 +1,8 @@
+
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Lock, User, ArrowRight, Loader2, AlertCircle, Mail, UserPlus, Eye, EyeOff, Shield, Cloud } from 'lucide-react';
+import { ZILL_TECH_LOGO_BASE64 } from '../assets/logo';
 
 export const Login: React.FC = () => {
   const { login, signUp } = useAuth();
@@ -45,11 +47,11 @@ export const Login: React.FC = () => {
               <Shield className="w-32 h-32 text-white" />
            </div>
            <div className="relative z-10">
-             <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center mx-auto mb-4 backdrop-blur-sm border border-white/30 shadow-lg">
-               <span className="text-3xl font-bold text-white">Z</span>
+             <div className="w-24 h-24 bg-white/20 rounded-2xl flex items-center justify-center mx-auto mb-4 backdrop-blur-sm border border-white/30 shadow-lg overflow-hidden">
+                <img src={ZILL_TECH_LOGO_BASE64} alt="Zill Tech Logo" className="w-full h-full object-cover" />
              </div>
              <h1 className="text-2xl font-bold text-white tracking-tight">
-               {isSignUp ? 'New Cloud Account' : 'CRM Authenticator'}
+               {isSignUp ? 'New Cloud Account' : 'Zill Tech Engineering'}
              </h1>
              <p className="text-indigo-100 mt-2 text-sm font-medium">
                {isSignUp ? 'Setup multi-device cloud sync' : 'Sign in to access your dashboard'}

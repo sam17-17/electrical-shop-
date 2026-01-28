@@ -1,3 +1,4 @@
+
 import { GoogleGenAI } from "@google/genai";
 
 // Guideline: Always use 'gemini-3-flash-preview' for basic text tasks.
@@ -18,7 +19,7 @@ export const generateResponse = async (
     
     if (contextData) {
       fullPrompt = `
-      You are a helpful CRM assistant for a company called "Zill Tech Solution". 
+      You are a helpful CRM assistant for a company called "ZILL TECH ENGINEERING SOLUTION LTD". 
       The user is currently viewing the following data on their screen:
       ${contextData}
 

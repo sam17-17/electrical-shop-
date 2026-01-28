@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { MessageSquare, X, Send, Sparkles, Loader2 } from 'lucide-react';
 import { generateResponse } from '../services/geminiService';
@@ -13,7 +14,7 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ currentPageData }) => 
     {
       id: 'welcome',
       role: 'model',
-      text: 'Hello! I am your Zill Tech AI assistant. How can I help you with your CRM data today?',
+      text: 'Hello! I am your Zill Tech Engineering AI assistant. How can I help you with your CRM data today?',
       timestamp: new Date(),
     },
   ]);
@@ -87,7 +88,7 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ currentPageData }) => 
           <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-4 flex items-center justify-between text-white">
             <div className="flex items-center space-x-2">
               <Sparkles className="w-5 h-5" />
-              <h3 className="font-semibold">Zill Tech AI</h3>
+              <h3 className="font-semibold">Zill Tech Engineering AI</h3>
             </div>
             <button 
               onClick={() => setIsOpen(false)}

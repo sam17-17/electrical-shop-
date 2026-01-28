@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { DataColumn, GenericEntity, LineItem, EntityType } from '../types';
 import { Plus, Trash2, RefreshCw, Key, Loader2, AlertCircle } from 'lucide-react';
 import { useData } from '../context/DataContext';
@@ -28,6 +28,11 @@ export const EntityForm: React.FC<EntityFormProps> = ({ columns, initialData, on
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { data } = useData();
+  
+  const dataRef = useRef(data);
+  useEffect(() => {
+    dataRef.current = data;
+  }, [data]);
 
   const inventoryItems = useMemo(() => data[EntityType.INVENTORY] || [], [data]);
 
@@ -35,6 +40,7 @@ export const EntityForm: React.FC<EntityFormProps> = ({ columns, initialData, on
     if (initialData) {
       setFormData(initialData);
     } else {
+      const currentData = dataRef.current;
       const defaults: any = {};
       defaults['id'] = generateUUID();
 
@@ -50,9 +56,8 @@ export const EntityForm: React.FC<EntityFormProps> = ({ columns, initialData, on
                  [EntityType.PURCHASE_INVOICES]: 'PINV-'
              };
              const prefix = prefixMap[entityType] || 'DOC-';
-             const existing = data[entityType] || [];
+             const existing = currentData[entityType] || [];
              
-             // Smart count based on max existing ref
              let maxNum = 1000;
              existing.forEach(e => {
                  const ref = String(e.docRef || '');
@@ -78,9 +83,9 @@ export const EntityForm: React.FC<EntityFormProps> = ({ columns, initialData, on
             defaults[col.key] = '';
         }
       });
-      setFormData(prev => ({...defaults, ...prev}));
+      setFormData(defaults);
     }
-  }, [initialData, columns, entityType, data]);
+  }, [initialData, columns, entityType]);
 
   const handleChange = (key: string, value: any, column?: DataColumn) => {
     setError(null);
