@@ -77,31 +77,32 @@ export const EntityList: React.FC<EntityListProps> = ({
     let cursorY = 20;
 
     // --- HEADER ---
-    doc.addImage(ZILL_TECH_LOGO_BASE64, 'JPEG', leftMargin, 15, 35, 35);
-    const textLeftMargin = leftMargin + 42;
-    cursorY = 20;
+    doc.addImage(ZILL_TECH_LOGO_BASE64, 'JPEG', leftMargin, 12, 25, 25);
+    const textLeftMargin = leftMargin + 30;
+    cursorY = 15;
 
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(18);
+    doc.setFontSize(15);
     doc.setTextColor(secondaryColor);
     doc.text("ZILL TECH ENGINEERING SOLUTION LTD", textLeftMargin, cursorY);
-    cursorY += 9;
+    cursorY += 7;
+
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
     doc.setTextColor(accentColor);
     const subtitle = "Building Tomorrow – Engineering Made Simple, Innovation in Motion";
     const subtitleLines = doc.splitTextToSize(subtitle, rightMargin - textLeftMargin);
     doc.text(subtitleLines, textLeftMargin, cursorY);
-    cursorY += (subtitleLines.length * 4) + 2;
+    cursorY += (subtitleLines.length * 3.5);
 
-    doc.setFontSize(9);
+    doc.setFontSize(8);
     doc.setTextColor(secondaryColor);
     doc.text("Tel: 0712 809 616 / 0703 535 558", textLeftMargin, cursorY);
-    cursorY += 6;
+    cursorY += 4.5;
     doc.text("Email: zilltech@outlook.com", textLeftMargin, cursorY);
-    const leftHeaderYEnd = cursorY > 50 ? cursorY : 55;
+    const leftHeaderYEnd = cursorY > 45 ? cursorY : 45;
 
-    let rightHeaderY = 20;
+    let rightHeaderY = 15;
     let docTitle = title.toUpperCase().slice(0, -1);
     if (currentPath === EntityType.SALES_ORDERS) docTitle = 'SALES ORDER';
     if (currentPath === EntityType.DELIVERY_NOTES) docTitle = 'DELIVERY NOTE';
@@ -109,26 +110,28 @@ export const EntityList: React.FC<EntityListProps> = ({
     if (currentPath === EntityType.SALES_QUOTES) docTitle = 'FORMAL QUOTATION';
 
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(16);
+    doc.setFontSize(14);
     doc.setTextColor(primaryColor);
     doc.text(docTitle, rightMargin, rightHeaderY, { align: 'right' });
-    rightHeaderY += 8;
+    rightHeaderY += 6.5;
+
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10);
+    doc.setFontSize(9);
     doc.setTextColor(secondaryColor);
     doc.text(`${docTitle} #: ${item.docRef || item.id || 'N/A'}`, rightMargin, rightHeaderY, { align: 'right' });
-    rightHeaderY += 7;
+    rightHeaderY += 5;
     const itemDate = item.date ? new Date(item.date).toLocaleDateString() : new Date().toLocaleDateString();
     doc.text(`Date: ${itemDate}`, rightMargin, rightHeaderY, { align: 'right' });
-    rightHeaderY += 7;
+    rightHeaderY += 5;
 
     if (item.status) {
         doc.setFont('helvetica', 'bold');
+        doc.setFontSize(9);
         doc.setTextColor(primaryColor);
         doc.text(`Status: ${item.status.toUpperCase()}`, rightMargin, rightHeaderY, { align: 'right' });
     }
     
-    cursorY = Math.max(leftHeaderYEnd, rightHeaderY) + sectionGap + 5;
+    cursorY = Math.max(leftHeaderYEnd, rightHeaderY) + sectionGap;
 
     doc.setDrawColor(226, 232, 240);
     doc.setLineWidth(0.5);
