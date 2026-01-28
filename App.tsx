@@ -66,9 +66,10 @@ const COLUMNS: Record<string, DataColumn[]> = {
     { key: 'status', label: 'Status', type: 'status', options: ['Draft', 'Dispatched', 'Delivered', 'Returned'], required: true },
   ],
   [EntityType.INVENTORY]: [
+    { key: 'itemType', label: 'Item Type', type: 'select', options: ['Product', 'Service'], required: true },
     { key: 'code', label: 'SKU / Code', type: 'text', required: true },
     { key: 'name', label: 'Item Name', type: 'text', required: true },
-    { key: 'stock', label: 'Quantity on Hand', type: 'number', required: true },
+    { key: 'stock', label: 'Qty on Hand', type: 'number' },
     { key: 'price', label: 'Unit Price', type: 'currency', required: true },
     { key: 'category', label: 'Category', type: 'select', options: CATEGORY_OPTIONS, required: true },
   ],
@@ -77,6 +78,14 @@ const COLUMNS: Record<string, DataColumn[]> = {
     { key: 'contact', label: 'Contact Person', type: 'text', required: true },
     { key: 'email', label: 'Email', type: 'email', required: true },
     { key: 'phone', label: 'Phone', type: 'phone' },
+  ],
+  [EntityType.PROJECTS]: [
+    { key: 'name', label: 'Project Name', type: 'text', required: true },
+    { key: 'customer', label: 'Client', type: 'select', sourceType: EntityType.CUSTOMERS, required: true },
+    { key: 'status', label: 'Status', type: 'status', options: ['Planning', 'In Progress', 'Completed', 'On Hold', 'Cancelled'], required: true },
+    { key: 'startDate', label: 'Start Date', type: 'date' },
+    { key: 'endDate', label: 'End Date', type: 'date' },
+    { key: 'description', label: 'Scope of Work', type: 'textarea' },
   ],
   [EntityType.PURCHASE_QUOTES]: PURCHASE_COLUMNS_BASE.map(c => c.key === 'status' ? { ...c, options: ['Draft', 'Sent', 'Rejected'] } : c),
   [EntityType.PURCHASE_ORDERS]: PURCHASE_COLUMNS_BASE.map(c => c.key === 'status' ? { ...c, options: ['Draft', 'Sent', 'Approved'] } : c),
@@ -140,13 +149,13 @@ const NAV_ITEMS: NavItem[] = [
   { id: EntityType.SALES_ORDERS, label: 'Sales Orders', icon: ShoppingCart, group: 'Sales', allowedRoles: OPS_ROLES },
   { id: EntityType.SALES_INVOICES, label: 'Sales', icon: Receipt, group: 'Sales', allowedRoles: [...OPS_ROLES, ROLES.ACCOUNTANT] },
   { id: EntityType.DELIVERY_NOTES, label: 'Delivery Notes', icon: Truck, group: 'Sales', allowedRoles: OPS_ROLES },
+  { id: EntityType.PROJECTS, label: 'Projects', icon: Folder, group: 'Operations', allowedRoles: OPS_ROLES },
   { id: EntityType.SUPPLIERS, label: 'Suppliers', icon: Briefcase, group: 'Purchases', allowedRoles: FINANCE_ROLES },
   { id: EntityType.PURCHASE_QUOTES, label: 'Purchase Quotes', icon: ClipboardList, group: 'Purchases', allowedRoles: FINANCE_ROLES },
   { id: EntityType.PURCHASE_ORDERS, label: 'Purchase Orders', icon: StickyNote, group: 'Purchases', allowedRoles: FINANCE_ROLES },
   { id: EntityType.PURCHASE_INVOICES, label: 'Purchase Invoices', icon: Receipt, group: 'Purchases', allowedRoles: FINANCE_ROLES },
-  { id: EntityType.INVENTORY, label: 'Inventory Items', icon: Layers, allowedRoles: [...OPS_ROLES, ROLES.ACCOUNTANT] },
-  { id: EntityType.PROJECTS, label: 'Projects', icon: Folder, allowedRoles: OPS_ROLES },
-  { id: EntityType.EMPLOYEES, label: 'Employees', icon: UserCheck, allowedRoles: [ROLES.ADMIN, ROLES.MANAGER] },
+  { id: EntityType.INVENTORY, label: 'Products & Services', icon: Layers, group: 'Operations', allowedRoles: [...OPS_ROLES, ROLES.ACCOUNTANT] },
+  { id: EntityType.EMPLOYEES, label: 'Employees', icon: UserCheck, group: 'Administration', allowedRoles: [ROLES.ADMIN, ROLES.MANAGER] },
   { id: EntityType.JOURNAL, label: 'Journal Entries', icon: BookOpen, allowedRoles: [ROLES.ADMIN, ROLES.ACCOUNTANT] },
   { id: EntityType.REPORTS, label: 'Reports', icon: PieChart, allowedRoles: [...FINANCE_ROLES, ROLES.VIEWER] },
   { id: EntityType.SYSTEM_USERS, label: 'System Users', icon: ShieldCheck, group: 'Administration', allowedRoles: [ROLES.ADMIN] },
@@ -188,7 +197,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
              <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shrink-0">
                <span className="text-white">Z</span>
              </div>
-             <span className="truncate">Zill Tech</span>
+             <span className="truncate">Zill Tech Solution</span>
           </div>
           <button onClick={() => setSidebarOpen(false)} className="lg:hidden p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 transition-colors"><X className="w-5 h-5" /></button>
         </div>

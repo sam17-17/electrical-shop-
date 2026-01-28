@@ -63,163 +63,169 @@ export const EntityList: React.FC<EntityListProps> = ({
     const doc = new jsPDF();
     const currencyFormatter = new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' });
     
-    // --- BRANDING & COLORS ---
-    const primaryColor = [79, 70, 229]; // Indigo-600
-    const secondaryColor = [15, 23, 42]; // Slate-900
-    const accentColor = [100, 116, 139]; // Slate-400
+    // --- CONFIG & CONSTANTS ---
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const leftMargin = 14;
+    const rightMargin = pageWidth - 14;
+    const primaryColor = '#4f46e5';
+    const secondaryColor = '#0f172a';
+    const accentColor = '#64748b';
+    const lineHeight = 5;
+    const sectionGap = 10;
+    let cursorY = 20;
 
-    // --- HEADER: COMPANY INFO ---
-    doc.setTextColor(secondaryColor[0], secondaryColor[1], secondaryColor[2]);
-    doc.setFontSize(24);
+    // --- HEADER ---
+    const leftHeaderYStart = cursorY;
     doc.setFont('helvetica', 'bold');
-    doc.text("Zill Tech Solution", 14, 20);
-    
-    doc.setFontSize(8);
+    doc.setFontSize(22);
+    doc.setTextColor(secondaryColor);
+    doc.text("ZILL ENTERPRISE", leftMargin, cursorY);
+    cursorY += 8;
     doc.setFont('helvetica', 'normal');
-    doc.setTextColor(accentColor[0], accentColor[1], accentColor[2]);
-    doc.text("OPERATIONAL INTELLIGENCE SYSTEMS", 14, 25);
-
-    doc.setTextColor(secondaryColor[0], secondaryColor[1], secondaryColor[2]);
+    doc.setFontSize(8);
+    doc.setTextColor(accentColor);
+    doc.text("OPERATIONAL INTELLIGENCE SYSTEMS", leftMargin, cursorY);
+    cursorY += sectionGap;
     doc.setFontSize(9);
-    doc.text("Plot 45, Industrial Avenue", 14, 35);
-    doc.text("Nairobi, Kenya - P.O Box 40100", 14, 40);
-    doc.text("Tel: +254 700 000 000 | Email: accounts@zilltech.com", 14, 45);
+    doc.setTextColor(secondaryColor);
+    doc.text("Plot 45, Industrial Avenue", leftMargin, cursorY);
+    cursorY += lineHeight;
+    doc.text("Nairobi, Kenya - P.O Box 40100", leftMargin, cursorY);
+    cursorY += lineHeight;
+    doc.text("Tel: +254 700 000 000 | Email: accounts@zill.com", leftMargin, cursorY);
+    const leftHeaderYEnd = cursorY;
 
-    // --- HEADER: DOCUMENT TYPE ---
+    let rightHeaderY = leftHeaderYStart;
     let docTitle = title.toUpperCase().slice(0, -1);
     if (currentPath === EntityType.SALES_ORDERS) docTitle = 'SALES ORDER';
     if (currentPath === EntityType.DELIVERY_NOTES) docTitle = 'DELIVERY NOTE';
     if (currentPath === EntityType.SALES_INVOICES) docTitle = 'TAX INVOICE';
     if (currentPath === EntityType.SALES_QUOTES) docTitle = 'FORMAL QUOTATION';
 
-    doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-    doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
-    doc.text(docTitle, 196, 20, { align: 'right' });
-
-    doc.setFontSize(10);
+    doc.setFontSize(16);
+    doc.setTextColor(primaryColor);
+    doc.text(docTitle, rightMargin, rightHeaderY, { align: 'right' });
+    rightHeaderY += 8;
     doc.setFont('helvetica', 'normal');
-    doc.setTextColor(secondaryColor[0], secondaryColor[1], secondaryColor[2]);
-    doc.text(`${docTitle} #: ${item.docRef || item.id || 'N/A'}`, 196, 28, { align: 'right' });
+    doc.setFontSize(10);
+    doc.setTextColor(secondaryColor);
+    doc.text(`${docTitle} #: ${item.docRef || item.id || 'N/A'}`, rightMargin, rightHeaderY, { align: 'right' });
+    rightHeaderY += lineHeight;
     const itemDate = item.date ? new Date(item.date).toLocaleDateString() : new Date().toLocaleDateString();
-    doc.text(`Date: ${itemDate}`, 196, 33, { align: 'right' });
-    
+    doc.text(`Date: ${itemDate}`, rightMargin, rightHeaderY, { align: 'right' });
+    rightHeaderY += 7;
+
     if (item.status) {
         doc.setFont('helvetica', 'bold');
-        doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-        doc.text(`Status: ${item.status.toUpperCase()}`, 196, 40, { align: 'right' });
+        doc.setTextColor(primaryColor);
+        doc.text(`Status: ${item.status.toUpperCase()}`, rightMargin, rightHeaderY, { align: 'right' });
     }
+    
+    cursorY = Math.max(leftHeaderYEnd, rightHeaderY) + sectionGap;
 
-    // Divider Line
     doc.setDrawColor(226, 232, 240);
     doc.setLineWidth(0.5);
-    doc.line(14, 52, 196, 52);
+    doc.line(leftMargin, cursorY, rightMargin, cursorY);
+    cursorY += sectionGap;
 
-    // --- BILL TO / CUSTOMER INFO ---
-    doc.setTextColor(accentColor[0], accentColor[1], accentColor[2]);
+    // --- BILL TO ---
+    doc.setFont('helvetica', 'bold');
     doc.setFontSize(8);
+    doc.setTextColor(accentColor);
+    doc.text("BILL TO / RECIPIENT:", leftMargin, cursorY);
+    cursorY += 6;
     doc.setFont('helvetica', 'bold');
-    doc.text("BILL TO / RECIPIENT:", 14, 62);
-    
-    doc.setTextColor(secondaryColor[0], secondaryColor[1], secondaryColor[2]);
     doc.setFontSize(11);
-    doc.setFont('helvetica', 'bold');
-    doc.text(item.customer || item.supplier || "Walk-in Customer", 14, 68);
-    
-    doc.setFontSize(9);
+    doc.setTextColor(secondaryColor);
+    doc.text(item.customer || item.supplier || "Walk-in Customer", leftMargin, cursorY);
+    cursorY += 6;
     doc.setFont('helvetica', 'normal');
-    if (item.phone) doc.text(`Contact: ${item.phone}`, 14, 73);
-    if (item.email) doc.text(`Email: ${item.email}`, 14, 78);
+    doc.setFontSize(9);
+    if (item.phone) { doc.text(`Contact: ${item.phone}`, leftMargin, cursorY); cursorY += lineHeight; }
+    if (item.email) { doc.text(`Email: ${item.email}`, leftMargin, cursorY); cursorY += lineHeight; }
+    cursorY += 6;
 
     // --- LINE ITEMS TABLE ---
     let tableHead = [['#', 'Item Description', 'Qty', 'Unit Price', 'Total']];
     let tableBody = (item.items || []).map((line: LineItem, index: number) => [
-        (index + 1).toString(), line.description || 'No Description', line.quantity.toString(),
+        (index + 1).toString(), line.description || 'N/A', line.quantity.toString(),
         currencyFormatter.format(line.unitPrice || 0), currencyFormatter.format(line.total || 0)
     ]);
-
-    // Stripping prices for Delivery Notes
     if (currentPath === EntityType.DELIVERY_NOTES) {
         tableHead = [['#', 'Item Description', 'Quantity', 'Remarks']];
         tableBody = (item.items || []).map((line: LineItem, index: number) => [
-            (index + 1).toString(), line.description || 'No Description', line.quantity.toString(), ''
+            (index + 1).toString(), line.description || 'N/A', line.quantity.toString(), ''
         ]);
     }
 
     autoTable(doc, { 
-        startY: 88, 
-        head: tableHead, 
-        body: tableBody, 
-        theme: 'grid', 
+        startY: cursorY, head: tableHead, body: tableBody, theme: 'grid', 
         headStyles: { fillColor: [15, 23, 42], textColor: 255, fontSize: 9, fontStyle: 'bold' },
-        styles: { fontSize: 8, cellPadding: 4, textColor: [30, 41, 59] },
+        styles: { fontSize: 8, cellPadding: 3, textColor: [30, 41, 59] },
         columnStyles: {
-            0: { cellWidth: 10 },
-            1: { cellWidth: 'auto' },
-            2: { cellWidth: 20, halign: 'center' },
-            3: { cellWidth: 35, halign: 'right' },
-            4: { cellWidth: 35, halign: 'right' }
+            0: { cellWidth: 10 }, 1: { cellWidth: 'auto' }, 2: { cellWidth: 20, halign: 'center' },
+            3: { cellWidth: 35, halign: 'right' }, 4: { cellWidth: 35, halign: 'right' }
         }
     });
+    cursorY = (doc as any).lastAutoTable.finalY;
 
     // --- SUMMARY & TOTALS ---
-    let finalY = (doc as any).lastAutoTable.finalY + 10;
+    const neededSpace = 85; // totals height + footer height
+    if (cursorY + neededSpace > pageHeight) {
+        doc.addPage();
+        cursorY = 20;
+    }
     
     if (currentPath !== EntityType.DELIVERY_NOTES) {
-        if (finalY > 240) { doc.addPage(); finalY = 20; }
-        
+        cursorY += sectionGap;
         const subTotal = (item.items || []).reduce((sum: number, i: LineItem) => sum + (i.total || 0), 0);
         const vat = subTotal * 0.18;
         const grandTotal = subTotal + vat;
 
+        const totalsY = cursorY;
         doc.setFillColor(248, 250, 252);
-        doc.rect(130, finalY, 66, 32, 'F');
-        
+        doc.rect(130, totalsY, 66, 32, 'F');
         doc.setFontSize(9);
-        doc.setTextColor(accentColor[0], accentColor[1], accentColor[2]);
-        doc.text("Subtotal:", 135, finalY + 8);
-        doc.text(currencyFormatter.format(subTotal), 191, finalY + 8, { align: 'right' });
-        
-        doc.text("VAT (18%):", 135, finalY + 16);
-        doc.text(currencyFormatter.format(vat), 191, finalY + 16, { align: 'right' });
-        
+        doc.setTextColor(accentColor);
+        doc.text("Subtotal:", 135, totalsY + 8);
+        doc.text(currencyFormatter.format(subTotal), 191, totalsY + 8, { align: 'right' });
+        doc.text("VAT (18%):", 135, totalsY + 16);
+        doc.text(currencyFormatter.format(vat), 191, totalsY + 16, { align: 'right' });
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(12);
-        doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-        doc.text("GRAND TOTAL:", 135, finalY + 26);
-        doc.text(currencyFormatter.format(grandTotal), 191, finalY + 26, { align: 'right' });
+        doc.setTextColor(primaryColor);
+        doc.text("GRAND TOTAL:", 135, totalsY + 26);
+        doc.text(currencyFormatter.format(grandTotal), 191, totalsY + 26, { align: 'right' });
     }
 
-    // --- FOOTER: SIGNATURES & TERMS ---
-    const footerY = 265;
+    // --- FOOTER ---
+    const footerY = pageHeight - 35;
     doc.setDrawColor(226, 232, 240);
-    doc.line(14, 255, 196, 255);
+    doc.line(leftMargin, footerY, rightMargin, footerY);
 
     if (currentPath === EntityType.DELIVERY_NOTES || currentPath === EntityType.SALES_ORDERS) {
-        doc.setFontSize(8);
-        doc.setTextColor(secondaryColor[0], secondaryColor[1], secondaryColor[2]);
-        doc.setFont('helvetica', 'bold');
-        doc.text("AUTHORIZED SIGNATORY", 14, footerY);
-        doc.text("RECEIVED BY (STAMP & SIGN)", 110, footerY);
-        
+        doc.setFontSize(8); doc.setTextColor(secondaryColor); doc.setFont('helvetica', 'bold');
+        doc.text("AUTHORIZED SIGNATORY", leftMargin, footerY + 8);
+        doc.text("RECEIVED BY (STAMP & SIGN)", 110, footerY + 8);
         doc.setLineWidth(0.2);
-        doc.line(14, footerY + 10, 80, footerY + 10); // Sig line 1
-        doc.line(110, footerY + 10, 180, footerY + 10); // Sig line 2
-    } else if (currentPath === EntityType.SALES_INVOICES) {
-        doc.setFontSize(8);
-        doc.setTextColor(accentColor[0], accentColor[1], accentColor[2]);
-        doc.setFont('helvetica', 'bold');
-        doc.text("BANK PAYMENT DETAILS:", 14, footerY - 5);
+        doc.line(leftMargin, footerY + 20, 80, footerY + 20);
+        doc.line(110, footerY + 20, 180, footerY + 20);
+    } else if (currentPath === EntityType.SALES_INVOICES || currentPath === EntityType.SALES_QUOTES) {
+        doc.setFontSize(8); doc.setTextColor(accentColor); doc.setFont('helvetica', 'bold');
+        doc.text("BANK PAYMENT DETAILS:", leftMargin, footerY + 6);
         doc.setFont('helvetica', 'normal');
-        doc.text("Bank Name: ZILL TECH BANK PLC", 14, footerY);
-        doc.text("Account Name: Zill Tech Solution LTD", 14, footerY + 4);
-        doc.text("Account #: 00010002000304", 14, footerY + 8);
-        doc.text("SWIFT/IBAN: ZTSKEXXX", 14, footerY + 12);
+        let bankY = footerY + 11;
+        doc.text("Bank Name: ZILL BANK PLC", leftMargin, bankY); bankY += 4;
+        doc.text("Account Name: ZILL ENTERPRISE LTD", leftMargin, bankY); bankY += 4;
+        doc.text("Account #: 00010002000304", leftMargin, bankY); bankY += 4;
+        doc.text("SWIFT/IBAN: ZILLKEXXXX", leftMargin, bankY);
     }
 
     doc.setFontSize(7);
-    doc.setTextColor(accentColor[0], accentColor[1], accentColor[2]);
-    doc.text("This is a computer generated document. Valid without physical signature.", 105, 285, { align: 'center' });
+    doc.setTextColor(accentColor);
+    doc.text("This is a computer generated document. Valid without physical signature.", pageWidth / 2, pageHeight - 10, { align: 'center' });
 
     doc.save(`${docTitle}_${item.docRef || item.id}.pdf`);
   };

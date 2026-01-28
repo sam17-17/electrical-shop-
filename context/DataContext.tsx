@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { EntityType, EntityState, GenericEntity, LineItem } from '../types';
 import { getSupabase } from '../services/supabase';
@@ -23,13 +24,6 @@ interface DataContextType {
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
-const INITIAL_STATE: EntityState = Object.values(EntityType).reduce((acc, type) => {
-  acc[type as EntityType] = [];
-  return acc;
-}, {} as EntityState);
-
-const LOCAL_STORAGE_KEY = 'zill_crm_local_data';
-
 const generateUUID = () => {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
@@ -38,6 +32,23 @@ const generateUUID = () => {
     return v.toString(16);
   });
 };
+
+const baseInitialState: EntityState = Object.values(EntityType).reduce((acc, type) => {
+  acc[type as EntityType] = [];
+  return acc;
+}, {} as EntityState);
+
+// Pre-populate with core services
+baseInitialState[EntityType.INVENTORY] = [
+  { id: generateUUID(), name: 'Solar Panel Installation', itemType: 'Service', price: 150000, stock: null, category: 'Services', code: 'SRV-SOLAR' },
+  { id: generateUUID(), name: 'CCTV System Installation', itemType: 'Service', price: 85000, stock: null, category: 'Services', code: 'SRV-CCTV' },
+  { id: generateUUID(), name: 'General Electrical Services', itemType: 'Service', price: 5000, stock: null, category: 'Services', code: 'SRV-ELEC' },
+  { id: generateUUID(), name: 'General Plumbing Services', itemType: 'Service', price: 4500, stock: null, category: 'Services', code: 'SRV-PLUMB' },
+];
+
+const INITIAL_STATE = baseInitialState;
+
+const LOCAL_STORAGE_KEY = 'zill_crm_local_data';
 
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, isAuthenticated, isDemoMode } = useAuth();
@@ -56,7 +67,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        return { ...INITIAL_STATE, ...parsed };
+        // Ensure all entity types are present, even if empty
+        const completeState = { ...INITIAL_STATE };
+        for (const key in parsed) {
+            if (Object.values(EntityType).includes(key as EntityType)) {
+                completeState[key as EntityType] = parsed[key];
+            }
+        }
+        return completeState;
       } catch (e) {
         return INITIAL_STATE;
       }
@@ -207,7 +225,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const items = target.items || [];
         for (const item of items) {
             const invItem = data[EntityType.INVENTORY].find(i => i.name === item.description);
-            if (invItem) {
+            if (invItem && invItem.itemType === 'Product') { // Only deduct stock for products
                 const newStock = Math.max(0, Number(invItem.stock) - Number(item.quantity));
                 // Internal call to avoid recursion but update inventory
                 await updateEntity(EntityType.INVENTORY, invItem.id, { stock: newStock });

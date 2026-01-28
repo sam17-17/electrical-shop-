@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { DataColumn, GenericEntity, LineItem, EntityType } from '../types';
 import { Plus, Trash2, RefreshCw, Key, Loader2, AlertCircle } from 'lucide-react';
@@ -38,7 +39,7 @@ export const EntityForm: React.FC<EntityFormProps> = ({ columns, initialData, on
       defaults['id'] = generateUUID();
 
       if (entityType) {
-         if ([EntityType.SALES_INVOICES, EntityType.SALES_QUOTES, EntityType.SALES_ORDERS, EntityType.DELIVERY_NOTES, EntityType.PURCHASE_ORDERS, EntityType.PURCHASE_QUOTES].includes(entityType)) {
+         if ([EntityType.SALES_INVOICES, EntityType.SALES_QUOTES, EntityType.SALES_ORDERS, EntityType.DELIVERY_NOTES, EntityType.PURCHASE_ORDERS, EntityType.PURCHASE_QUOTES, EntityType.PURCHASE_INVOICES].includes(entityType)) {
              const prefixMap: Record<string, string> = {
                  [EntityType.SALES_INVOICES]: 'INV-',
                  [EntityType.SALES_QUOTES]: 'QTN-',
@@ -65,7 +66,7 @@ export const EntityForm: React.FC<EntityFormProps> = ({ columns, initialData, on
 
       columns.forEach(col => {
         if (col.key === 'id') return;
-        if (col.type === 'status' && col.options && col.options.length > 0) {
+        if ((col.key === 'status' || col.key === 'itemType') && col.options && col.options.length > 0) {
           defaults[col.key] = col.options[0];
         } else if (col.type === 'date') {
             defaults[col.key] = new Date().toISOString().split('T')[0];
@@ -183,6 +184,11 @@ export const EntityForm: React.FC<EntityFormProps> = ({ columns, initialData, on
       )}
 
       {columns.map((col) => {
+        // HIDE STOCK QTY FOR SERVICES
+        if (col.key === 'stock' && formData.itemType === 'Service') {
+          return null;
+        }
+
         if (col.type === 'readonly') {
              const displayValue = (col.key === 'id' && formData['docRef']) ? formData['docRef'] : (formData[col.key] || '');
              return (
@@ -200,191 +206,141 @@ export const EntityForm: React.FC<EntityFormProps> = ({ columns, initialData, on
 
         if (col.type === 'items') {
             return (
-                <div key={col.key} className="space-y-2 border-t border-b border-slate-100 py-4 my-2">
-                    <div className="flex justify-between items-center mb-2">
-                        <label className="text-sm font-medium text-slate-700">{col.label}</label>
-                        <button type="button" onClick={handleAddItem} className="text-indigo-600 hover:text-indigo-700 text-xs font-medium flex items-center">
-                            <Plus className="w-3 h-3 mr-1" /> Add Item
+                <div key={col.key} className="space-y-2 border-t border-slate-200 pt-4">
+                    <div className="flex justify-between items-center">
+                        <label className="text-sm font-bold text-slate-800">{col.label}</label>
+                        <button type="button" onClick={handleAddItem} className="px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-bold flex items-center hover:bg-indigo-100 transition-colors">
+                            <Plus className="w-3.5 h-3.5 mr-1" />
+                            Add Item
                         </button>
                     </div>
                     
-                    <datalist id="inventory-list">
-                        {inventoryItems.map(item => (
-                            <option key={item.id} value={item.name}>
-                                {item.code} - KES {item.price}
-                            </option>
-                        ))}
-                    </datalist>
-                    
-                    <div className="bg-slate-50 rounded-lg p-2 space-y-2">
-                        {(formData.items || []).length === 0 && (
-                            <p className="text-xs text-slate-400 text-center py-2">No items added yet.</p>
-                        )}
-                        {(formData.items || []).map((item: LineItem) => (
-                            <div key={item.id} className="grid grid-cols-12 gap-2 items-end">
-                                <div className="col-span-5">
-                                    <label className="text-[10px] text-slate-500 block mb-1">Product</label>
-                                    <input 
-                                        list="inventory-list"
-                                        type="text" 
-                                        value={item.description}
-                                        onChange={(e) => handleItemChange(item.id, 'description', e.target.value)}
-                                        className="w-full px-2 py-1 bg-white border border-slate-200 rounded text-sm"
-                                        required
-                                        autoComplete="off"
-                                    />
-                                </div>
-                                <div className="col-span-2">
-                                    <label className="text-[10px] text-slate-500 block mb-1">Qty</label>
-                                    <input 
-                                        type="number" 
-                                        min="1"
-                                        value={item.quantity}
-                                        onChange={(e) => handleItemChange(item.id, 'quantity', Number(e.target.value))}
-                                        className="w-full px-2 py-1 bg-white border border-slate-200 rounded text-sm text-right"
-                                        required
-                                    />
-                                </div>
-                                <div className="col-span-2">
-                                    <label className="text-[10px] text-slate-500 block mb-1">Price</label>
-                                    <input 
-                                        type="number" 
-                                        min="0"
-                                        step="0.01"
-                                        value={item.unitPrice}
-                                        onChange={(e) => handleItemChange(item.id, 'unitPrice', Number(e.target.value))}
-                                        className="w-full px-2 py-1 bg-white border border-slate-200 rounded text-sm text-right"
-                                        required
-                                    />
-                                </div>
-                                <div className="col-span-2 text-right">
-                                    <label className="text-[10px] text-slate-500 block mb-1">Total</label>
-                                    <div className="text-xs font-bold text-slate-600 mb-1.5">{item.total.toFixed(2)}</div>
-                                </div>
-                                <div className="col-span-1 flex justify-center pb-1">
-                                    <button type="button" onClick={() => handleRemoveItem(item.id)} className="text-red-400 hover:text-red-600">
-                                        <Trash2 className="w-4 h-4" />
-                                    </button>
+                    <div className="space-y-3">
+                        {(formData.items || []).map((item: LineItem, index: number) => (
+                            <div key={item.id} className="p-3 bg-slate-50 rounded-lg border border-slate-200/80">
+                                <div className="grid grid-cols-12 gap-2">
+                                    <div className="col-span-12 sm:col-span-5">
+                                        <label className="text-[10px] font-bold text-slate-500">Item / Service</label>
+                                        <input
+                                            type="text"
+                                            list="inventory-items"
+                                            value={item.description}
+                                            onChange={(e) => handleItemChange(item.id, 'description', e.target.value)}
+                                            className="block w-full text-xs p-2 border border-slate-300 rounded-md mt-1"
+                                            placeholder="Type or select..."
+                                        />
+                                    </div>
+                                    <div className="col-span-4 sm:col-span-2">
+                                        <label className="text-[10px] font-bold text-slate-500">Qty</label>
+                                        <input
+                                            type="number"
+                                            value={item.quantity}
+                                            onChange={(e) => handleItemChange(item.id, 'quantity', parseFloat(e.target.value) || 0)}
+                                            className="block w-full text-xs p-2 border border-slate-300 rounded-md mt-1"
+                                        />
+                                    </div>
+                                    <div className="col-span-8 sm:col-span-3">
+                                        <label className="text-[10px] font-bold text-slate-500">Unit Price</label>
+                                        <input
+                                            type="number"
+                                            value={item.unitPrice}
+                                            onChange={(e) => handleItemChange(item.id, 'unitPrice', parseFloat(e.target.value) || 0)}
+                                            className="block w-full text-xs p-2 border border-slate-300 rounded-md mt-1"
+                                        />
+                                    </div>
+                                    <div className="col-span-12 sm:col-span-2 flex items-end justify-between">
+                                        <div>
+                                            <label className="text-[10px] font-bold text-slate-500">Total</label>
+                                            <p className="text-xs font-bold mt-1.5">{new Intl.NumberFormat('en-KE', { currency: 'KES' }).format(item.total)}</p>
+                                        </div>
+                                        <button type="button" onClick={() => handleRemoveItem(item.id)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md">
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         ))}
                     </div>
+
+                    <div className="pt-4 text-right flex justify-end">
+                       <div className="bg-slate-100 p-4 rounded-xl border border-slate-200">
+                           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Grand Total (inc VAT)</p>
+                           <p className="text-2xl font-black text-slate-800 tracking-tight">{new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' }).format(formData.amount || 0)}</p>
+                       </div>
+                    </div>
+
+                    <datalist id="inventory-items">
+                        {inventoryItems.map((item) => (
+                            <option key={item.id} value={item.name}>{item.code}</option>
+                        ))}
+                    </datalist>
                 </div>
             );
         }
 
-        if (col.key === 'amount' && columns.some(c => c.type === 'items')) {
-            const subTotal = (formData.items || []).reduce((sum: number, item: LineItem) => sum + item.total, 0);
-            const vat = subTotal * 0.18;
-            const calculatedTotal = subTotal + vat;
-
+        let inputElement;
+        switch (col.type) {
+          case 'select':
+            const options = col.sourceType ? (data[col.sourceType] || []).map((item: any) => item.name) : col.options;
             return (
-                <div key={col.key} className="flex flex-col items-end border-t pt-2 space-y-1">
-                     <div className="text-right text-xs text-slate-500">
-                        <span className="mr-4">Subtotal:</span>
-                        <span className="font-medium">{new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' }).format(subTotal)}</span>
-                     </div>
-                     <div className="text-right text-xs text-slate-500">
-                        <span className="mr-4">VAT (18%):</span>
-                        <span className="font-medium">{new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' }).format(vat)}</span>
-                     </div>
-                     <div className="text-right">
-                        <span className="text-sm text-slate-700 font-bold mr-4">Grand Total:</span>
-                        <span className="text-xl font-bold text-slate-800">{new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' }).format(calculatedTotal)}</span>
-                     </div>
-                </div>
-            );
-        }
-
-        if (col.key === 'id') return null;
-
-        return (
-          <div key={col.key} className="flex flex-col space-y-1.5">
-            <label className="text-sm font-medium text-slate-700">
-              {col.label} {col.required && <span className="text-red-500">*</span>}
-            </label>
-            
-            {col.type === 'select' && (
-              <div className="relative">
-                 <input
-                    type="text"
-                    list={`list-${col.key}`}
-                    required={col.required}
-                    value={formData[col.key] || ''}
-                    onChange={(e) => handleChange(col.key, e.target.value, col)}
-                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm transition-all"
-                    placeholder={`Select or type ${col.label}...`}
-                    autoComplete="off"
-                 />
-                 <datalist id={`list-${col.key}`}>
-                    {col.sourceType && (data[col.sourceType] || []).map((entity: any) => (
-                        <option key={entity.id} value={entity.name} />
-                    ))}
-                    {(!col.sourceType && col.options) && col.options.map((opt: string) => (
-                        <option key={opt} value={opt} />
-                    ))}
-                 </datalist>
-              </div>
-            )}
-            
-            {col.type === 'status' && (
-               <select
-                required={col.required}
-                value={formData[col.key] || ''}
-                onChange={(e) => handleChange(col.key, e.target.value, col)}
-                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm transition-all"
-              >
-                <option value="" disabled>Select {col.label}</option>
-                {col.options?.map((opt) => (
-                  <option key={opt} value={opt}>{opt}</option>
-                ))}
-              </select>
-            )}
-
-            {col.type === 'textarea' && (
-              <textarea
-                required={col.required}
-                value={formData[col.key] || ''}
-                onChange={(e) => handleChange(col.key, e.target.value, col)}
-                rows={3}
-                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm transition-all"
-              />
-            )}
-
-            {col.type === 'password' && (
-              <div className="relative group/pin">
-                <input
-                  type="password"
+              <div key={col.key}>
+                <label className="text-sm font-medium text-slate-700">{col.label}</label>
+                <select
                   required={col.required}
                   value={formData[col.key] || ''}
                   onChange={(e) => handleChange(col.key, e.target.value, col)}
-                  className="w-full pl-10 pr-12 py-2 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm transition-all"
-                  placeholder="Enter 4-digit PIN"
-                />
-                <div className="absolute left-3 top-2.5 text-slate-400"><Key className="w-4 h-4" /></div>
-                <button type="button" onClick={() => handleChange('pin', Math.floor(1000 + Math.random() * 9000).toString())} className="absolute right-2 top-1.5 p-1.5 text-indigo-500 hover:bg-indigo-50 rounded-md transition-colors"><RefreshCw className="w-4 h-4" /></button>
+                  className="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                >
+                  <option value="" disabled>{`Select ${col.label}`}</option>
+                  {options?.map((opt: string) => <option key={opt} value={opt}>{opt}</option>)}
+                </select>
               </div>
-            )}
-            
-            {(col.type !== 'select' && col.type !== 'status' && col.type !== 'textarea' && col.type !== 'password') && (
-              <input
-                type={col.type === 'currency' ? 'number' : col.type}
-                step={col.type === 'currency' ? '0.01' : undefined}
-                required={col.required}
-                value={formData[col.key] || ''}
-                onChange={(e) => handleChange(col.key, e.target.value, col)}
-                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm transition-all"
-              />
-            )}
-          </div>
-        );
+            );
+          case 'textarea':
+            return (
+              <div key={col.key}>
+                <label className="text-sm font-medium text-slate-700">{col.label}</label>
+                <textarea
+                  required={col.required}
+                  value={formData[col.key] || ''}
+                  onChange={(e) => handleChange(col.key, e.target.value)}
+                  rows={4}
+                  className="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                />
+              </div>
+            );
+          default:
+            return (
+              <div key={col.key}>
+                <label className="text-sm font-medium text-slate-700">{col.label}</label>
+                <input
+                  type={col.type === 'currency' || col.type === 'number' ? 'number' : col.type}
+                  required={col.required}
+                  value={formData[col.key] || ''}
+                  onChange={(e) => handleChange(col.key, e.target.value)}
+                  className="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  step={col.type === 'currency' ? '0.01' : 'any'}
+                />
+              </div>
+            );
+        }
       })}
 
-      <div className="flex justify-end gap-3 pt-4 mt-4 border-t border-slate-100">
-        <button type="button" onClick={onCancel} disabled={isSubmitting} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50">Cancel</button>
-        <button type="submit" disabled={isSubmitting} className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center">
-          {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-          {initialData ? 'Update Record' : 'Create Record'}
+      <div className="flex justify-end space-x-3 pt-4 border-t border-slate-200">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="px-6 py-2.5 text-sm font-bold bg-white border border-slate-300 text-slate-700 rounded-xl hover:bg-slate-50 transition-all"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className="px-6 py-2.5 text-sm font-bold bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center shadow-lg shadow-indigo-200"
+        >
+          {isSubmitting && <Loader2 className="animate-spin -ml-1 mr-2 h-4 w-4" />}
+          {isSubmitting ? 'Saving...' : (initialData ? 'Update Record' : 'Save Record')}
         </button>
       </div>
     </form>
