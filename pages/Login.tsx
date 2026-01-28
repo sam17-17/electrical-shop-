@@ -47,8 +47,8 @@ export const Login: React.FC = () => {
               <Shield className="w-32 h-32 text-white" />
            </div>
            <div className="relative z-10">
-             <div className="w-24 h-24 bg-white/20 rounded-2xl flex items-center justify-center mx-auto mb-4 backdrop-blur-sm border border-white/30 shadow-lg overflow-hidden">
-                <img src={ZILL_TECH_LOGO_BASE64} alt="Zill Tech Logo" className="w-full h-full object-cover" />
+             <div className="w-24 h-24 bg-white/20 rounded-2xl flex items-center justify-center mx-auto mb-4 backdrop-blur-sm border border-white/30 shadow-lg overflow-hidden p-2">
+                <img src={ZILL_TECH_LOGO_BASE64} alt="Zill Tech Logo" className="w-full h-full object-contain" />
              </div>
              <h1 className="text-2xl font-bold text-white tracking-tight">
                {isSignUp ? 'New Cloud Account' : 'Zill Tech Engineering'}

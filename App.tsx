@@ -7,13 +7,14 @@ import {
   Briefcase, Receipt, Layers, Folder, UserCheck, BookOpen, 
   PieChart, Settings as SettingsIcon, Menu, X, ChevronRight,
   ClipboardList, StickyNote, LogOut, Database, Cloud, CloudOff, ShieldCheck,
-  AlertTriangle, ArrowRight, RefreshCw, Zap
+  AlertTriangle, ArrowRight, RefreshCw, Zap, HelpCircle
 } from 'lucide-react';
 import { EntityType, NavItem, DataColumn } from './types';
 import { Summary } from './pages/Summary';
 import { EntityList } from './pages/EntityList';
 import { Settings } from './pages/Settings';
 import { Login } from './pages/Login';
+import { HowToUse } from './pages/HowToUse';
 import { AiAssistant } from './components/AiAssistant';
 import { DataProvider, useData } from './context/DataContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -162,6 +163,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: EntityType.REPORTS, label: 'Reports', icon: PieChart, allowedRoles: [...FINANCE_ROLES, ROLES.VIEWER] },
   { id: EntityType.SYSTEM_USERS, label: 'System Users', icon: ShieldCheck, group: 'Administration', allowedRoles: [ROLES.ADMIN] },
   { id: EntityType.SETTINGS, label: 'Settings', icon: SettingsIcon, allowedRoles: [ROLES.ADMIN] },
+  { id: EntityType.HOW_TO_USE, label: 'How to Use', icon: HelpCircle, group: 'Support', allowedRoles: ALL_ROLES },
 ];
 
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -196,7 +198,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       <aside className={`${sidebarOpen ? 'w-64 translate-x-0' : 'w-0 -translate-x-full lg:w-20 lg:translate-x-0'} bg-slate-900 text-slate-300 transition-all duration-300 flex flex-col fixed lg:relative z-30 h-full border-r border-slate-800 shadow-xl overflow-hidden`}>
         <div className="h-16 flex items-center justify-between px-4 border-b border-slate-800 shrink-0">
           <div className={`font-bold text-white text-xl flex items-center space-x-3 ${!sidebarOpen && 'lg:hidden'}`}>
-             <img src={ZILL_TECH_LOGO_BASE64} alt="Zill Tech Logo" className="w-8 h-8 rounded-lg object-cover" />
+             <img src={ZILL_TECH_LOGO_BASE64} alt="Zill Tech Logo" className="w-8 h-8 rounded-lg object-contain bg-white p-0.5" />
              <span className="truncate text-base">Zill Tech Engineering</span>
           </div>
           <button onClick={() => setSidebarOpen(false)} className="lg:hidden p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 transition-colors"><X className="w-5 h-5" /></button>
@@ -284,6 +286,8 @@ const AppContent: React.FC = () => {
   if (!isAuthenticated) return <Login />;
 
   const userRole = user?.user_metadata?.role || user?.role;
+  
+  const dedicatedRoutes = [EntityType.SUMMARY, EntityType.SETTINGS, EntityType.HOW_TO_USE];
 
   const handleFormSubmit = async (formData: any) => {
     if (!activeType) return;
@@ -299,8 +303,9 @@ const AppContent: React.FC = () => {
       <Layout>
         <Routes>
           <Route path="/" element={<Summary />} />
+          <Route path="/how-to-use" element={<HowToUse />} />
           <Route path="/settings" element={userRole === ROLES.ADMIN ? <Settings /> : <Navigate to="/" replace />} />
-          {NAV_ITEMS.filter(item => item.id !== EntityType.SUMMARY && item.id !== EntityType.SETTINGS).map((item) => (
+          {NAV_ITEMS.filter(item => !dedicatedRoutes.includes(item.id)).map((item) => (
             <Route key={item.id} path={`/${item.id}`} element={
               (!item.allowedRoles || item.allowedRoles.includes(userRole)) ? (
                 <EntityList title={item.label} columns={COLUMNS[item.id] || DEFAULT_COLUMNS} data={data[item.id] || []} 

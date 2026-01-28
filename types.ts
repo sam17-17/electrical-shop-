@@ -1,3 +1,4 @@
+
 export enum EntityType {
   SUMMARY = 'summary',
   BANK_CASH = 'bank-cash',
@@ -17,6 +18,7 @@ export enum EntityType {
   REPORTS = 'reports',
   SETTINGS = 'settings',
   SYSTEM_USERS = 'system-users',
+  HOW_TO_USE = 'how-to-use',
 }
 
 export interface LineItem {
